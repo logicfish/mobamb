@@ -1,0 +1,9 @@
+{
+	"authors": [
+		"Mark Fisher"
+	],
+	"copyright": "Copyright © 2019, Mark Fisher",
+	"description": "Mobile Ambients and Flow Logic",
+	"license": "GNU Lesser Public License 3.0",
+	"name": "mobamb"
+}
