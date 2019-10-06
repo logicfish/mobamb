@@ -1,0 +1,29 @@
+
+
+JoinGroup <- GroupList '[' Join* ']'
+
+
+GroupList <- (identifier(',' identifier)*) ('out')?
+  (identifier(',' identifier)*) ('in')?
+
+
+Join <- (JoinTuple / JoinProcessGroup)* JoinBody
+
+JoinTuple <- '(' Tuple ('.' Tuple)* ')' JoinTuple?
+
+Tuple <- UpTuple / DownTuple
+
+UpTuple <- '^' identifier
+
+DownTuple <- '|' identifier
+
+JoinProcessGroup <- (identifier ('.' identifier)*) / JoinQuery
+
+JoinBody <- JoinProcedure? JoinStatement
+  (('.' / ',') JoinProcedure? JoinStatement)*
+
+JoinStatement <- ('{' JoinStatement* '}')* / ( !('{'/'}')* JoinStatement? )
+
+JoinProcedure <- GroupList ( '&&' GroupList)*
+
+JoinQuery <- GroupList ('||' GroupList)*

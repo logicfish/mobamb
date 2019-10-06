@@ -1,0 +1,15 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/static-analyser
+static-analyser.so
+static-analyser.dylib
+static-analyser.dll
+static-analyser.a
+static-analyser.lib
+static-analyser-test-*
+*.exe
+*.o
+*.obj
+*.lst

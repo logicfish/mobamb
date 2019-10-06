@@ -1,0 +1,50 @@
+ProcessGrammar(CapType="('in' / 'out')"):
+
+	Process <- Composition / _Binding
+
+	Composition <- _Binding "|" Process
+
+	_Binding <- Binding / _Restriction
+
+  _Restriction <- Restriction / _InputProcess
+
+  _InputProcess <- InputAction / InputProcess
+
+  InputProcess <- Nesting / _OutputProcess
+
+  _OutputProcess <- OutputAction / _AmbientProcess
+
+  _AmbientProcess <- Ambient /  _CapAction
+
+  _CapAction <- CapAction / Void?
+
+
+	Void <- "0"
+
+	Binding <- _Restriction "{" BoundName ("," BoundName)* "}"
+
+	Restriction < "(v" Name ")" _InputProcess
+
+	Nesting <- Domain "(" Process ")"
+
+	Ambient <- Name "[" Process? "]"
+
+	CapAction <- Capability ("." _Restriction)?
+
+	InputAction <- "(" Name ")" Channel? "." _Restriction
+
+	OutputAction <- "<" Capability ">" Channel? ("." _Restriction)?
+
+	Capability <- CapPath / CapEntry
+
+	CapPath <- CapEntry "." Capability
+
+	CapEntry <- CapType? Name
+
+  BoundName <- Name "/" Name
+
+  Channel <- ("^" / "|")? Name
+
+	Name <- Domain ( identifier / "*" / "?" )
+
+	Domain <- (identifier "·")?

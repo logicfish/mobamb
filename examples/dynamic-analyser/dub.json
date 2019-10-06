@@ -1,0 +1,13 @@
+{
+	"authors": [
+		"Mark"
+	],
+	"copyright": "Copyright © 2019, Mark",
+	"description": "A minimal D application.",
+	"license": "proprietary",
+	"name": "dynamic-analyser",
+	"targetType": "executable",
+	"dependencies" : {
+		"mobamb" : { "path" : "../../" }
+	}
+}

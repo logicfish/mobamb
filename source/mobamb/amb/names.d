@@ -4,11 +4,8 @@ private import std.traits,
     std.algorithm,
     std.variant;
 
-version(unittest) {
-    import std.stdio;
-};
-
 private import mobamb.amb.domain;
+private import mobamb.amb.tag;
 
 alias Action = void delegate(TypedProcess);
 
@@ -26,10 +23,11 @@ class ProcessName : Name {
               _action = p;
             }
         }
-        bool matches(Name n) {
-            return this.getName.matches(n);
+        bool matches(const(Name) n) const {
+            return this.name.matches(n);
         }
-        Name getName() {
+        @property
+        inout(Name) name() @safe nothrow pure inout {
           return this.outer;
         }
     }
@@ -87,12 +85,20 @@ class ProcessName : Name {
 
     //string id;
     //string getId() { return id; }
-    bool matches(Capability n) {
+    bool matches(const(Name) n) const {
         //return id == n.getId();
         return n==this;
     }
-    override Name getName() {
-        return null;
+
+    @property
+    inout(Name) name() @safe nothrow pure inout {
+      return null;
+    }
+
+    Domain _domain;
+    @property
+    inout(Domain) domain() @safe nothrow pure inout {
+      return _domain;
     }
 };
 
@@ -100,7 +106,7 @@ class NameLiteral : ProcessName {
     Variant lit;
     this(Variant v) { lit = v; }
     this(T)(T t) { this(Variant(t)); }
-    override bool matches(Capability n) {
+    override bool matches(const(Name) n) const {
         auto l = cast(NameLiteral)n;
         if(l is null) return super.matches(n);
         return lit == l.lit;
@@ -108,20 +114,20 @@ class NameLiteral : ProcessName {
 };
 
 class NameBinding : ProcessName {
-    Capability boundName;
-    override bool matches(Capability n) {
+    Name boundName;
+    override bool matches(const(Name) n) const {
         //if(boundName is null) return false;
         return n.matches(boundName);
         //return boundName == n;
     }
-    this(Capability bind) {
+    this(Name bind) {
       this.boundName = bind;
     }
 };
 
 class TypedName : ProcessName {
     ProcessName[] types;
-    override bool matches(Capability n) {
+    override bool matches(const(Name) n) const {
         if(super.matches(n)) return true;
         foreach(t;types) {
             if(t.matches(n)) return true;
@@ -131,7 +137,7 @@ class TypedName : ProcessName {
 };
 
 final class WildcardName : ProcessName {
-    override bool matches(Capability n) {
+    override bool matches(const(Name) n) const {
         return true;
     }
 
@@ -145,7 +151,9 @@ final class WildcardName : ProcessName {
 };
 
 final class NilName : ProcessName {
-    override bool matches(Capability n) { return false; }
+    override bool matches(const(Name) n) const {
+      return false;
+    }
     static NilName nilName;
     static this() {
         if(nilName is null) {

@@ -1,28 +1,49 @@
 module mobamb.amb.host;
 
+private import std.random;
+
 private import mobamb.amb.tag;
 private import mobamb.amb.domain;
-private import mobamb.amb.ambients;
+private import mobamb.amb.ambient;
 
 final class HostObject {
-  TagPool _tagPool;
-  void runProcess(TypedProcess r) {
-    while(p.cleanup is false) {}
-    auto h = p.evolutions;
-    while(h.length>0) {
-      if(h.length==1) h[0].execute;
-      else h[uniform(0, h.length-1)].execute;
-      while(r.cleanup is false){}
-      h = r.evolutions;
+  void evaluate(TypedProcess r) {
+    while(r.cleanup is false) {}
+    bool f = tagPool.evaluate;
+    while(f) {
+      while(r.cleanup is false) {}
+      f = tagPool.evaluate;
     }
+  }
+  TagPool _tagPool;
+  this(TagPool t = new TagPool) {
+    _tagPool = t;
+  }
+  auto tagPool() {
+    return _tagPool;
   }
 }
 
 class HostAmbient : MobileAmbient {
   HostObject _hostObject;
 
-  this(HostObject o) {
+  this(HostObject o = new HostObject) {
     super();
     this._hostObject = o;
+  }
+  bool createTag(T)(Capability cap,MobileAmbient amb) {
+    return tagPool.createTag!T(cap,amb);
+  }
+  protected auto tagPool() {
+    return _hostObject.tagPool;
+  }
+  HostObject hostObject() {
+    return _hostObject;
+  }
+  const(HostObject) hostObject() const {
+    return _hostObject;
+  }
+  void evaluate() {
+    hostObject.evaluate(this);
   }
 }

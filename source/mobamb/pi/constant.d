@@ -1,5 +1,5 @@
 
-module mobamb.amb.constant;
+module mobamb.pi.constant;
 
 class TypeConstant {
 }
