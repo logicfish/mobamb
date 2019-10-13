@@ -1,7 +1,5 @@
 module mobamb.amb.domain;
 
-private import mobamb.amb.tag;
-
 /**
 A Capability has a Name and can match another Capability.
 **/
@@ -13,7 +11,9 @@ interface Capability {
       true if the capabilty match passes.
     **/
     bool matches(const(Name))const;
+    //@property const(Name) name() @safe nothrow pure const;
     @property inout(Name) name() @safe nothrow pure inout;
+    string capType() @safe nothrow pure const;
 }
 
 /**
@@ -29,9 +29,11 @@ interface Name : Capability {
 
 interface Channel {
   alias OnInput = void delegate (Capability i);
-  bool void output(Capability o);
-  override void input(OnInput o);
+  bool output(Capability o);
+  bool input(OnInput o);
   bool inputAvailable();
+  //@property const(Name) name() @safe nothrow pure const;
+  @property const(Name) name() @safe nothrow pure const;
 }
 
 /**
@@ -47,13 +49,14 @@ interface Domain {
     //bool bind(const(Name),const(Capability));
     //bool restrict(const(Name));
     inout(Capability) binding(const(Name)) inout;
+    Domain binding(const(Name),Capability);
 }
 
 /**
 The computing environment available to any process.
 **/
 interface TypeEnvironment : Domain {
-    ProcessDomain createProcessDomain(TypedProcess) const;
+//    ProcessDomain createProcessDomain(TypedProcess) const;
     /* void excercise(ProcessDomain,Capability); */
 }
 
@@ -61,12 +64,19 @@ interface TypeEnvironment : Domain {
 A process with a type domain.
  **/
 interface TypedProcess {
+    @property inout(Name) name() @safe nothrow pure inout;
     @property inout(ProcessDomain) domain() @safe nothrow pure inout;
     /**
     An internal method called before evaluation to ensure the consistency
     of the process tree in memory.
     **/
     bool cleanup();
+    /**
+    Evaluate all capabilities including children.
+    Returns:    true if a match was found. false otherwise.
+    **/
+    bool evaluateAll();
+    TypedProcess getLocalAmbient();
 }
 
 /**
@@ -77,20 +87,34 @@ only be attached to a single process. This link is immutable.
 interface ProcessDomain : Domain {
     //@property inout(TypeEnvironment) environment() @safe nothrow pure inout;
     @property inout(ProcessDomain) parent() @safe nothrow pure inout;
+    @property ProcessDomain parent(ProcessDomain d) @safe nothrow pure;
     //bool capsMatch(Name n,Capability c);
     //void excercise(TypedProcess p,Capability c);
     //bool canExit(Name) const;
     //bool canEnter(Name);
-    void enter(TypedProcess p);
-    void exit(TypedProcess p);
-    //TypedProcess[] match(Capability);
-    //bool createTag(Tag.Apply f,Tag.Close c)(Capability);
-    //bool createTag(T : TagPool._Tag)(Capability);
-    //void input(const(Name),P);
-    //Capability read(const(Name));
+    //void enter(TypedProcess p);
+    //void exit(TypedProcess p);
 
-    /*bool output(const(Name),Capability o);
-    void input(const(Name),OnInput o);
-    bool inputAvailable(const(Name));*/
+    bool output(Capability o);
+    // read input from channel n using capabilty o.
+    bool input(Capability o);
+    bool inputAvailable(const(Name)n);
     Channel channel(const(Name)n);
+    inout(ProcessDomain) getTypedDomain() inout;
+    inout(Capability) binding(const(Name)) inout;
+    ProcessDomain binding(const(Name),Capability);
+
+    inout(Name) resolve(inout(Name) n) inout;
+    inout(Capability) resolveCaps(inout(Capability) _n) inout;
+
+    static ProcessDomain _localDomain;
+    static auto localDomain() {
+      return _localDomain;
+    }
+
+    static auto localDomain(ProcessDomain d) {
+      auto _d = _localDomain;
+      _localDomain = d;
+      return _d;
+    }
 }

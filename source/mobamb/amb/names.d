@@ -2,10 +2,10 @@ module mobamb.amb.names;
 
 private import std.traits,
     std.algorithm,
-    std.variant;
+    std.variant,
+    std.conv;
 
 private import mobamb.amb.domain;
-private import mobamb.amb.tag;
 
 alias Action = void delegate(TypedProcess);
 
@@ -24,21 +24,34 @@ class ProcessName : Name {
             }
         }
         bool matches(const(Name) n) const {
-            return this.name.matches(n);
+            auto _n = (ProcessDomain.localDomain is null) ? this.name
+                : ProcessDomain.localDomain.resolve(this.name);
+
+            if(_n is null) return false;
+            return _n.matches(n);
         }
         @property
         inout(Name) name() @safe nothrow pure inout {
           return this.outer;
+        }
+        override string toString() const {
+          return "Caps:"~ capType ~ "(" ~ name.to!string ~ ")";
         }
     }
     final class In : Caps {
         this(Action p=null) {
           super(p);
         }
+        string capType() @safe nothrow pure const {
+          return "in";
+        }
     };
     final class Out : Caps {
         this(Action p=null) {
           super(p);
+        }
+        string capType() @safe nothrow pure const {
+          return "out";
         }
     };
     //class Open : Caps {
@@ -50,7 +63,7 @@ class ProcessName : Name {
     //class Exit : Caps {
     //	this(Action p=null) { super(p); }
     //};
-    final class _Enter : Caps {
+    /* final class _Enter : Caps {
         this(Action p=null) { super(p); }
     };
     final class _Exit : Caps {
@@ -73,20 +86,80 @@ class ProcessName : Name {
     };
     final class Out_ : Caps {
         this(Action p=null) { super(p); }
-    };
+    }; */
 
+    abstract class IOCaps : Caps {
+      this(Action p=null) {
+          super(p);
+      }
+      /*@property
+      const(Name) channel() @safe nothrow pure const {
+        //return _channel;
+        return name;
+      }*/
+      alias channel = name;
+    }
     // Pi caps
-    final class Input : Caps {
-        this(Action p=null) { super(p); }
+    abstract class InputCaps : IOCaps {
+        const(Name) _binding;
+        this(const(Name)b,Action p=null) {
+            super(p);
+            this._binding = b;
+        }
+        string capType() @safe nothrow pure const {
+          return "input";
+        }
+        @property
+        const(Name) binding() @safe nothrow pure const {
+          return _binding;
+        }
     };
-    final class Output : Caps {
-        this(Action p=null) { super(p); }
+    final class Input : InputCaps {
+      this(const(Name)b,Action p=null) {
+          super(b,p);
+      }
     };
+    final class InputParent : InputCaps {
+      this(const(Name)b,Action p=null) {
+          super(b,p);
+      }
+    };
+    final class InputChildren : InputCaps {
+      this(const(Name)b,Action p=null) {
+          super(b,p);
+      }
+    };
+    abstract class OutputCaps : IOCaps {
+        Capability _value;
+        this(Capability v,Action p=null) {
+          super(p);
+          _value = v;
+        }
+        string capType() @safe nothrow pure const {
+          return "output";
+        }
+        @property
+        inout(Capability) value() @safe nothrow pure inout {
+          return _value;
+        }
+    };
+    final class Output : OutputCaps {
+      this(Capability v,Action p=null) {
+        super(v,p);
+      }
+    }
+    final class OutputParent : OutputCaps {
+      this(Capability v,Action p=null) {
+        super(v,p);
+      }
+    }
+    final class OutputChildren : OutputCaps {
+      this(Capability v,Action p=null) {
+        super(v,p);
+      }
+    }
 
-    //string id;
-    //string getId() { return id; }
     bool matches(const(Name) n) const {
-        //return id == n.getId();
         return n==this;
     }
 
@@ -100,6 +173,9 @@ class ProcessName : Name {
     inout(Domain) domain() @safe nothrow pure inout {
       return _domain;
     }
+    string capType() @safe nothrow pure const {
+      return "name";
+    }
 };
 
 class NameLiteral : ProcessName {
@@ -110,6 +186,9 @@ class NameLiteral : ProcessName {
         auto l = cast(NameLiteral)n;
         if(l is null) return super.matches(n);
         return lit == l.lit;
+    }
+    override string toString() const {
+      return "NameLiteral:" ~ lit.get!string;
     }
 };
 

@@ -9,5 +9,6 @@
 	"dependencies" : {
 		"metad" : "*"
 	},
+	"debugs" : [ "Tagging","Types","Ambient","Host" ],
 	"stringImportPaths" : [ "resources" ]
 }

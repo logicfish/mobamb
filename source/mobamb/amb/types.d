@@ -1,83 +1,72 @@
 module mobamb.amb.types;
 
+private import std.algorithm;
+
+debug {
+  import std.experimental.logger;
+}
+
 private import mobamb.amb.domain;
 private import mobamb.amb.tag;
 private import mobamb.amb.names;
+private import mobamb.amb.channel;
+private import mobamb.amb.process;
 private import mobamb.amb.ambient;
 private import mobamb.amb.host;
-
-private import std.algorithm;
-
-synchronized class PIChannel : Channel {
-    //Capability[ProcessName] bindings;
-
-    bool _inputAvailable = false;
-    Capability inputCap = null;
-    OnInput onInput = null;
-
-    @property {
-      bool inputAvailable() @safe nothrow pure const {
-        return _inputAvailable;
-      }
-      typeof(this) inputAvailable(bool b) @safe nothrow pure {
-        _inputAvailable = b;
-        return this;
-      }
-    }
-
-    override bool output(Capability o) {
-        if(inputAvailable) return false;
-        if(onInput!=null) {
-          onInput(o);
-          onInput = null;
-        }
-        else {
-          inputAvailable = true;
-          inputCap = o;
-        }
-        return true;
-    }
-
-    override void input(OnInput o) {
-        if(inputAvailable==true) {
-          o(inputCap);
-          inputCap=null;
-          inputAvailable = false;
-        } else {
-          onInput = o;
-        }
-    }
-};
-
-
 
 /**
 The type environment implementation.
 **/
 class TypedProcessEnvironment : TypeEnvironment {
-  static TypedEnvironment _globalEnv;
+  static TypeEnvironment _globalEnv;
+  Name _name;
 
   static this() {
-    _globalEnv = new TypedEnvironment;
+    _globalEnv = new TypedProcessEnvironment;
   }
   /* ProcessDomain createProcessDomain(TypedProcess p) const {
     return new
   }
   void excercise(ProcessDomain,Capability); */
+
+    @property inout(Name) name() @safe nothrow pure inout {
+        return _name;
+    }
+    bool isBound(const(Name)) const {
+        return false;
+    }
+    bool isRestricted(const(Name)) const {
+        return false;
+    }
+    bool isRestricted() const {
+        return false;
+    }
+    inout(Capability) binding(const(Name)) inout {
+        return null;
+    }
+    typeof(this) binding(const(Name),Capability) {
+      return this;
+    }
+
 }
 
 
 /**
- * The ProcessDomain implementation
+ The ProcessDomain implementation.
+ Inheriting classes are not usually made 'final', in comparison to
+ the corresponding TypedProcess classes. This is to allow extensions
+ to modify behaviour by overriding the typed process domain classes, rather than
+ the typed process classes.
  **/
-class TypedProcessDomain : ProcessDomain {
+class UntypedProcessDomain : ProcessDomain {
   MobileProcess _process;
-  TypedProcessDomain _parent;
+  ProcessDomain _parent;
+
   @property {
     inout(ProcessDomain) parent() @safe nothrow pure inout {
       return _parent;
     }
-    typeof(this) parent(TypedProcessDomain d) @safe nothrow pure {
+    typeof(this) parent(ProcessDomain d) @safe nothrow pure {
       _parent = d;
       return this;
     }
@@ -91,13 +80,37 @@ class TypedProcessDomain : ProcessDomain {
     inout(Name) name() @safe nothrow pure inout {
       return _process.name;
     }
-    void output(const(Name) n,Capability o) {
-      process.getLocalAmbient.domain.output(n,o);
-    }
-    void input(const(Name),OnInput o) {
-      process.getLocalAmbient.domain.input(n,o);
-    }
-}
+  }
+
+  inout(ProcessDomain) getTypedDomain() inout {
+    auto a = cast(TypedProcessDomain) this;
+    if(a !is null) return cast(inout(ProcessDomain))this;
+    if(parent is null) return null;
+    return parent.getTypedDomain();
+  }
+
+  /**
+  Output on channel 'n' using 'o'.
+  **/
+  bool output(Capability o) {
+    //auto c = cast(ProcessName.Output)o;
+    //return _process.getLocalAmbient.domain.output(n,o);
+    return _process.getLocalAmbient.domain.output(o);
+  }
+  /**
+  Input from channel 'n' using capability 'o'.
+  **/
+  bool input(Capability o) {
+    /* auto c = cast(ProcessName.Input)o;
+    return _process.getLocalAmbient.domain.input(c.name,c.binding); */
+    return _process.getLocalAmbient.domain.input(o);
+  }
+  bool inputAvailable(const(Name) n) {
+    return _process.getLocalAmbient.domain.inputAvailable(n);
+  }
+  Channel channel(const(Name)n) {
+    return _process.getLocalAmbient.domain.channel(n);
+  }
   //bool capsMatch(Name n,Capability c);
   //void apply(TypedProcess p,Capability c) {
   //}
@@ -113,22 +126,30 @@ class TypedProcessDomain : ProcessDomain {
   Params:
     p = the new parent.
   **/
-  void enter(TypedProcess p) {
-    if(process.parent !is null) {
-      _parent = process.parent.domain;
+  /*
+  void enter(TypedProcess _p) {
+    auto p = cast(MobileProcess)_p;
+    if(p !is null) {
+        _parent = p.domain;
     } else {
-      _parent = TypedProcessDomain.topDomain;
+        _parent = TypedProcessDomain._topDomain;
     }
-  }
+    //if(process.parent !is null) {
+    //  _parent = process.parent.domain;
+    //} else {
+    //  _parent = TypedProcessDomain.topDomain;
+    //}
+  }*/
 
   /**
   The Process has set a null parent.
   Params:
     p = the previous parent.
   **/
+  /*
   void exit(TypedProcess p) {
-    _parent = null;
-  }
+    _parent = TypedProcessDomain._topDomain;
+  }*/
 
   /*TypedProcess[] match(Capability) {
     return [];
@@ -141,32 +162,86 @@ class TypedProcessDomain : ProcessDomain {
     //return false;
   //}
   this(TypedProcess p) {
-    _typedProcess = p;
+    _process = cast(MobileProcess)p;
     //_typedProcess._domain = this;
+    parent = _topDomain;
   }
 
-  bool isBound(const(Name) n) const {
-    if(n in _inputs) {
-      return true;
-    } else return parent.isBound(n);
-  }
-  bool isRestricted(const(Name) n) const {
-    if(n in _inputs) return false;
-    else return parent.isRestricted(n);
-  }
-  bool isRestricted() const {
-    return parent.isRestriced();
-  }
   //Name[] restrictions() const;
   //Name[] bindings() const;
+
+  bool isBound(const(Name) n) const {
+//    if(n in _inputs && _inputs[Name].inputAvailable) {
+//      return true;
+//    } else return parent.isBound(n);
+    return parent.isBound(n);
+  }
+  bool isRestricted(const(Name) n) const {
+    //if(n in _inputs && _inputs[Name].inputAvailable) return false;
+    //else return parent.isRestricted(n);
+    return parent.isRestricted(n);
+  }
+  bool isRestricted() const {
+    return parent.isRestricted();
+  }
   //bool bind(const(Name) n,const(Capability) c) {
   //  return parent.bind(n,c);
   //}
   /* bool restrict(const(Name) n) {
     return parent.restrict(n,c);
   } */
-  const(Capability) binding(const(Name) n) const {
+  inout(Capability) binding(const(Name) n) inout {
     return parent.binding(n);
+  }
+  ProcessDomain binding(const(Name)n,Capability c) {
+    parent.binding(n,c);
+    return this;
+  }
+  /*bool output(const(Name)n,Capability o) {
+    return parent.output(n,o);
+  }
+  bool input(const(Name)n,Channel.OnInput o) {
+    return parent.input(n,o);
+  }
+  bool inputAvailable(const(Name)n) {
+    return parent.inputAvailable(n);
+  }
+  Channel channel(const(Name)n) {
+    return parent.channel(n);
+  }*/
+  inout(Name) resolve(inout(Name) n) inout {
+    debug(Types) {
+      sharedLog.info("resolve ",n);
+    }
+    if(!isBound(n)) return n;
+    auto b = binding(n);
+    auto a = cast(inout(Name))b;
+    if(a is null) return n;
+    if(a !is n) return resolve(a);
+    //if(isRestricted(a)) return null;
+    debug(Types) {
+      sharedLog.info("resolved ",n," - ",a);
+    }
+    return a;
+  }
+  inout(Capability) resolveCaps(inout(Capability) _n) inout {
+    debug(Types) {
+      sharedLog.info("resolve ",_n);
+    }
+    auto n = cast(inout(Name))_n;
+    if(n is null) return _n;
+    if(!isBound(n)) {
+      if(isRestricted(n)) return null;
+      return n;
+    }
+    auto b = binding(n);
+    auto _b = cast(inout(Name))b;
+    //if(_b !is null && isRestricted(_b)) return null;
+    if(b !is _n) return resolveCaps(b);
+    debug(Types) {
+      sharedLog.info("resolved ",_n," - ",b);
+    }
+    return b;
   }
 
   static TopDomain _topDomain;
@@ -175,437 +250,296 @@ class TypedProcessDomain : ProcessDomain {
   }
 }
 
-class TopDomain : TypedProcessDomain {
-  bool isBound(const(Name) n) const {
+abstract class VoidProcessDomain : UntypedProcessDomain {
+  override bool isBound(const(Name) n) const {
     return false;
   }
-  bool isRestricted(const(Name) n) const {
+  override bool isRestricted(const(Name) n) const {
     return false;
   }
-  bool isRestricted() const {
+  override bool isRestricted() const {
     return false;
   }
-  const(Capability) binding(const(Name) n) const {
-    return n;
+  override inout(Capability) binding(const(Name) n) inout {
+    return null;
+  }
+  override ProcessDomain binding(const(Name),Capability) {
+    // throw..?
+    return this;
+  }
+
+  override bool output(Capability o) {
+    return false;
+  }
+  override bool input(Capability o) {
+    return false;
+  }
+  override bool inputAvailable(const(Name)n) {
+    return false;
+  }
+  override Channel channel(const(Name)n) {
+    return null;
+  }
+  this(TypedProcess p) {
+    super(p);
   }
 }
 
-class RestrictedProcessDomain : TypedProcessDomain {
+final class TopDomain : VoidProcessDomain {
+  this() {
+    super(null);
+  }
+}
+class NullProcessDomain : VoidProcessDomain {
+  this(TypedProcess p) {
+    super(p);
+  }
+}
+
+class ComposedProcessDomain : UntypedProcessDomain {
+  this(TypedProcess p) {
+    super(p);
+  }
+}
+class RestrictedProcessDomain : UntypedProcessDomain {
   const(Name) _restriction;
   @property {
     inout(const(Name)) restriction() @safe nothrow pure inout {
       return _restriction;
     }
-    typeof(this) restriction(const(Name) n) @safe nothrow pure {
-      _restriction = n;
-      return this;
-    }
   }
-  bool isRestricted(const(Name) n) const {
-    if(n !in _inputs && restriction.matches(n)) return true;
-    else return parent.isRestriced(n);
+  override bool isRestricted(const(Name) n) const {
+    if(restriction.matches(n) && !parent.isBound(n)) return true;
+    else return parent.isRestricted(n);
   }
-  bool isRestricted() const {
-    return isBound(restriction);
+  override bool isRestricted() const {
+    if(isBound(restriction)) return false;
+    else return true;
   }
   this(TypedProcess p,const(Name) r) {
     super(p);
-    restriction = r;
+    _restriction = r;
   }
 }
-class BindingDomain : TypedProcessDomain {
+class ReplicationProcessDomain : UntypedProcessDomain {
+  this(TypedProcess p) {
+    super(p);
+  }
+}
+class BindingProcessDomain : UntypedProcessDomain {
   const(Name) _boundName;
-  Capability _bouldValue;
-  bool isBound(const(Name) n) const {
+  Capability _boundValue;
+
+  override bool isBound(const(Name) n) const {
     if(boundName.matches(n)) {
       return true;
     } else {
       return parent.isBound(n);
     }
   }
-  const(Capability) binding (const(Name) n) const {
-    if(boundName.matches(n)) return value;
+  override inout(Capability) binding(const(Name) n) inout {
+    if(boundName.matches(n)) return boundValue;
     else return parent.binding(n);
   }
+  override ProcessDomain binding(const(Name)n,Capability c) {
+    parent.binding(n,c);
+    return this;
+  }
+
   @property {
     inout(const(Name)) boundName() @safe nothrow pure inout {
       return _boundName;
     }
-    typeof(this) boundName(const(Name) n) @safe nothrow pure {
-      _boundName = n;
-      return this;
-    }
     inout(Capability) boundValue() @safe nothrow pure inout {
       return _boundValue;
     }
-    typeof(this) boundValue(Capability v) @safe nothrow pure {
+  }
+  this(TypedProcess p,const(Name) n,Capability v) {
+      super(p);
+      _boundName = n;
       _boundValue = v;
-      return this;
+  }
+}
+
+class TypedProcessDomain : UntypedProcessDomain {
+
+  Capability[const(Name)] _bindings;
+
+  this(TypedProcess p) {
+      super(p);
+  }
+  override bool isBound(const(Name) n) const {
+    debug(Types) {
+      sharedLog.info("isBound ",n);
+    }
+    //if(n in channels && channels[n].inputAvailable) {
+    if(n in _bindings) {
+      return true;
+    } else {
+        /* if(parent !is null)return parent.isBound(n);
+        return false; */
+        return parent.isBound(n);
     }
   }
-  this(TypedProcesss p,const(Name) n,Capability v) {
-      super(p);
-      boundName = n;
-      boundValue = v;
+  override bool isRestricted(const(Name) n) const {
+    if(n in _bindings) {
+        return false;
+    } else {
+        return parent.isRestricted(n);
+    }
+  }
+  override bool isRestricted() const {
+    return parent.isRestricted();
+  }
+  override inout(Capability) binding(const(Name) n) inout {
+    if(n in _bindings) return _bindings[n];
+    return parent.binding(n);
+  }
+  override ProcessDomain binding(const(Name)n,Capability c) {
+    //parent.binding(n,c);
+    debug(Types) {
+      sharedLog.info("binding ",n," -- ",c);
+    }
+    _bindings[n]=c;
+    return this;
   }
 }
 
 class MobileProcessDomain : TypedProcessDomain {
-  PIChannel[const(Name)] channels;
-
-  Channel channel(const(Name)n) {
-    if(n !in channels) channels[n] = new PIChannel;
-    return channels[n];
+  PIChannel[] channels;
+  bool hasChannel(const(Name)_n) {
+    auto n = resolve(_n);
+    synchronized(this) {
+      return !(channels.filter!(x=>x.name.matches(n)).empty);
+    }
   }
-  bool output(const(Name)n,Capability o) {
-    auto c = channel(n);
-    if(c.inputAvailable)return false;
-    c.output(o);
-    return true;
-  }
-  void input(const(Name)n,OnInput o) {
-    if(n !in channels) channels[n] = new PIChannel;
-    channels[n].input(n,o);
-  }
-  bool inputAvailable(const(Name)n) {
-    if(n !in channels) channels[n] = new PIChannel;
-    return channels[n].inputAvailable;
-  }
-}
-
-abstract class MobileProcess : TypedProcess {
-    ProcessName _name;
-    MobileProcess _parent;
-    MobileProcess[] _children;
-    //Tag[] evol;
-    ProcessDomain _domain;
-
-    this() {
-      _domain = new MobileProcessDomain(this);
+  override Channel channel(const(Name)n) {
+    debug(Types) {
+      sharedLog.info("channel ",n);
     }
-
-    @property {
-      inout(ProcessName) name() @safe nothrow pure inout {
-        return _name;
-      }
-      inout(MobileProcess) parent() @safe nothrow pure inout {
-        return _parent;
-      }
-      typeof(this) parent(MobileProcess p) @safe nothrow pure {
-        _parent = p;
-        return this;
-      }
-      inout(MobileProcess[]) children() @safe nothrow pure inout {
-        return _children;
-      }
-      inout(Name) domain() @safe nothrow pure inout {
-        return _domain;
-      }
-    }
-
-    void movingOut(MobileProcess c) {
-        //if(!(c in children)) return;
-        if(c.parent!=this)return;
-        //c.exit(p);
-        exit_(c.name);
-        children = children.remove!(a => a == c);
-        c._exit(name);
-        c.parent = null;
-    }
-
-    void movingIn(MobileProcess c) {
-        if(c is null || c == this || c == parent) return;
-        //this.enter_(c.name);
-        children ~= c;
-        //c._enter(name);
-        c.parent = this;
-        //c.enter(this);
-    }
-
-    override bool cleanup() {
-        foreach(c;children) if(c.cleanup==false) return false;
-        return true;
-    }
-    ProcessName findChildByName(ProcessName n) {
-        n = cast(ProcessName)resolve(n);
-        foreach(c;children) {
-            if (c.name.matches(n)) {
-              return c.name;
-            }
+    if(!hasChannel(n)) {
+        // search parents...
+        auto q = parent;
+        auto p = cast(MobileProcessDomain)parent;
+        while((p is null || !p.hasChannel(n)) && q !is null) {
+            q = q.parent;
+            p = cast(MobileProcessDomain)q;
+        }
+        if(p !is null && p.hasChannel(n)) {
+            return p.channel(n);
         }
         return null;
     }
-    auto findMatchingChildren(ProcessName.Caps c) {
-        return children.filter!(n=>c.matches(n.name));
+    else {
+      synchronized(this) {
+        return channels.filter!(x=>x.name.matches(n)).front;
+      }
     }
-
-
-    MobileAmbient getLocalAmbient() {
-        auto ma = cast(MobileAmbient)this;
-        if(ma !is null) return ma;
-        auto p = parent;
-        while(p.parent !is null && cast(MobileAmbient)p is null) p = p.parent;
-        return cast(MobileAmbient)p;
-    }
-    MobileAmbient getParentAmbient() {
-      auto p = getLocalAmbient().parent;
-      if(p is null) return null;
-      return p.getLocalAmbient();
-    }
-    HostAmbient getHostAmbient() {
-        auto ha = cast(HostAmbient)this;
-        if(ha !is null) return ha;
-        auto p = parent;
-        while(p.parent !is null && cast(HostAmbient)p is null) {
-          p = p.parent;
-        }
-        return cast(HostAmbient)p;
-    }
-
-    //void enter(MobileProcess) { }
-    //void exit(MobileProcess) { }
-    /*void _enter(ProcessName n) { }
-    void _exit(ProcessName n) { }
-    void enter_(ProcessName n) { }
-    void exit_(ProcessName n) { }*/
-
-/*
-    Capability resolve(Capability o) {
-        if(cast(ProcessName)o is null) return o;
-        if(cast(NameBinding)o !is null) return o;
-        auto n = cast(ProcessName)o;
-        // does it match siblings?
-        //foreach(c;parent.children) {
-        //	if(c.getName.matches(o)) return new NameBinding(c.getName);
-        //}
-        // does the name match our parent?
-        // does the name match a local binding?
-        MobileProcess p = this;
-        while(p !is null) {
-            if(cast(NamedProcess)p !is null) {
-                auto q = cast(NamedProcess)p;
-                if(q.name.matches(n)) {
-                    return new NameBinding(q.name);
-                }
-                //if(n in q.bindings)return q.bindings[n];
-                foreach(cap,name;q.bindings) {
-                    if (name.matches(n)) {
-                        return new NameBinding(cap);
-                    }
-                }
-                // does the name match a restriction?
-                //} else if(isAssignable!(Restriction,typeid(p))) {
-                //	auto q = cast(Restriction)parent;
-            }
-            // ...
-            p = p.parent;
-        }
-        return o;
-    }*/
-};
-
-class NullProcess : MobileProcess {
-    override bool cleanup() {
-        parent.movingOut(this);
-        return false;
-    }
-    /* override Tag[] evolutions() {
-        return [];
-    } */
-};
-
-class ComposedProcess : MobileProcess {
-    override bool cleanup() {
-        /* evol = []; */
-        auto p = parent;
-        //if(p is null) return this;
-        if(parent !is null) {
-            parent.movingOut(this);
-            foreach(c;children) {
-                if(p !is null) {
-                    movingOut(c);
-                    p.movingIn(c);
-                }
-            }
-            return false;
-        }
-        return true;
-    }
-
-};
-
-
-class CapsProcess : MobileProcess {
-    ProcessName.Caps cap;
-    this(ProcessName.Caps c) { cap=c; }
-    override bool cleanup() {
-        /* evol = []; */
-        auto p = getParentAmbient();
-        if(p !is null) {
-            parent.movingOut(this);
-            getLocalAmbient.caps ~= cap;
-            return false;
-        }
-        return true;
-    }
-};
-class MatchParentNameProcess (T : ProcessName.Caps) : MobileProcess {
-    ProcessName match;
-    Action action;
-    this(ProcessName n,Action a) { match=n; action=a; }
-    override bool cleanup() {
-        /* evol = []; */
-        auto p = getParentAmbient();
-        if(p !is null) {
-            ProcessName n = cast(ProcessName)resolve(match);
-            if(p.name.matches(n)) {
-                auto c = m.new T(action);
-                parent.movingOut(this);
-                getLocalAmbient.caps ~= c;
-                return false;
-            }
-        }
-        return true;
-    }
-};
-class MatchSiblingNameProcess (T : ProcessName.Caps) : MobileProcess {
-    ProcessName match;
-    Action action;
-    this(ProcessName n,Action a) { match=n; action=a; }
-    override bool cleanup() {
-        evol = [];
-        auto p = getParentAmbient();
-        if(p !is null) {
-            //auto m = cast(MobileAmbient)p;
-            //Name n = p.resolve(match);
-            auto m = p.findChildByName(match);
-            if(m) {
-                auto c = m.new T(action);
-                parent.movingOut(this);
-                getLocalAmbient.caps ~= c;
-                return false;
-            }
-        }
-        return true;
-    }
-};
-
-class Restriction : MobileProcess {
-    //bool restricted;
-    //Capability restrictedName;
-    override bool cleanup() {
-        if(super.cleanup == false) return false;
-        //localDomain.restrict();
-        parent.movingOut(this);
-        return false;
-    }
-    this(const(Name) r) {
-      _domain = new RestrictedProcessDomain(this,r);
-    }
-};
-class Binding : MobileProcess {
-    override bool cleanup() {
-        if(super.cleanup == false) return false;
-        //localDomain.bind();
-        parent.movingOut(this);
-        return false;
-    }
-    this(const(Name) n,Capability v) {
-      _domain = new RestrictedProcessDomain(this,n,v);
-    }
-};
-
-/*class Constructor : MobileProcess {
-  MobileProcess newProcess;
-
-  this(MobileProcess p) {
-    newProcess = p;
   }
-  override bool cleanup() {
-      if(super.cleanup == false) return false;
-      evol = [localDomain.createTag({
-        parent.movingOut(this);
-        parent.movingIn(newProcess);
-        return true;
-      },delegate void(bool){})];
-
+  override bool output(Capability _o) {
+    auto o = cast(ProcessName.Output)_o;
+    assert(o !is null);
+    auto n = resolve(o.name);
+    auto c = channel(n);
+    debug(Types) {
+      sharedLog.info("domain output ",_o.name,"(",n,")"," ",o.value);
+    }
+    if(c is null) {
+        debug(Types) {
+          sharedLog.info("new channel ",n);
+        }
+        auto _c = new PIChannel(n);
+        synchronized(this) {
+          channels ~= _c;
+        }
+        c = _c;
+    }
+    if(c.inputAvailable)return false;
+    //return c.output(v);
+    if(c.output(o.value)) {
+      debug(Types) {
+        sharedLog.info("done output ",o.value);
+      }
+      //auto _o = cast(ProcessName.Caps)o;
+      //if(_o !is null)_o.action();
+      o.action()(process);
       return true;
+    }
+    return false;
   }
-  override Tag[] evolutions() {
-    return evol;
+  override bool input(Capability _o) {
+    debug(Types) {
+      sharedLog.info("domain input ",_o);
+    }
+    auto o = cast(ProcessName.Input)_o;
+    auto n = resolve(o.name);
+    auto b = resolve(o.binding);
+    debug(Types) {
+      sharedLog.info("domain input binding ",b);
+    }
+    if(isBound(b)) {
+      debug(Types) {
+        sharedLog.info("domain input already bound ",b);
+      }
+      return false;
+    }
+    auto c = channel(n);
+    if(c is null) {
+      debug(Types) {
+        sharedLog.info("new channel ",n);
+      }
+      auto _c = new PIChannel(n);
+      synchronized(this) {
+        channels ~= _c;
+      }
+      c = _c;
+    }
+    return c.input((i){
+        debug(Types) {
+          sharedLog.info("channel input ",i);
+        }
+      // add the bound value to the local domain.
+        binding(b,resolveCaps(i));
+        //if(o.action !is null)
+        synchronized(this) {
+          channels = channels.remove!(x=>x is c);
+        }
+        o.action()(process);
+      });
   }
-}*/
-
-class Replication : MobileProcess {
-
+  override bool inputAvailable(const(Name)n) {
+    auto a = channel(resolve(n));
+    if(a is null) return false;
+    return a.inputAvailable;
+  }
+  this(TypedProcess p) {
+      super(p);
+  }
 }
 
-/*
-abstract class IOProcess : MobileProcess {
-    /*override bool cleanup() {
-        bool delta=true;
-        //while(!(parent is null) && !isAssignable!(NamedProcess,typeid(parent))) {
-        while(!(parent is null) && cast(NamedProcess)parent !is null) {
-            parent.movingOut(this);
-            if(!(parent.parent is null)) parent.parent.movingIn(this);
-            delta=false;
-        }
-        if(delta)delta=super.cleanup;
-        return delta;
-    }* /
-};
+alias Location = MobileProcessDomain;
 
-class OutputProcess : IOProcess {
-    Capability outputCap;
-    this(Capability o) { this.outputCap = o; }
-    override bool cleanup() {
-        this.outputCap = resolve(this.outputCap);
-        return super.cleanup;
-    }
-    /* override Tag[] evolutions() {
-        if(cast(NamedProcess)parent is null) return [];
-        auto p = cast(NamedProcess)parent;
-        if(p.inputAvailable == true) return [];
-        /* return [localDomain.createTag!((){
-            p.movingOut(this);
-            p.output(outputCap);
-            return true;
-        },delegate void(bool f){})()]; * /
-        return [];
-    } * /
-};
-
-class InputProcess : IOProcess {
-    ProcessName inputName;
-    MobileProcess action;
-    this(ProcessName i,MobileProcess a) {
-        this.inputName = i;
-        this.action = a;
-    }
-
-    /* override Tag[] evolutions() {
-        auto p = cast(NamedProcess)parent;
-        //if(p.inputAvailable == false) return [];
-        /* return [localDomain.createTag!({
-            p.movingOut(this);
-            p.input((i) {
-                p.bindings[inputName]=i;
-                p.movingIn(action);
-            });
-            return true;
-        },delegate void(bool){})()]; * /
-        return [];
-    } * /
-};
-*/
 
 /**
 This action adds a new child to an ambient.
 **/
 static Action makeAction(MobileProcess child) {
     return (p){
+        debug(Types) {
+          sharedLog.info("process action ",child);
+        }
         auto a = cast(MobileAmbient)p;
         if(a !is null) a.movingIn(child);
+    };
+}
+/**
+This action adds a new child to an ambient.
+**/
+static Action makeAction(T : MobileProcess)(ProcessName n) {
+    return (p){
+        //auto a = cast(MobileAmbient)p;
+        //if(a !is null) a.movingIn(child);
+        new T(p,n);
     };
 }
 /**
@@ -613,7 +547,10 @@ This action adds a new capabilty to an ambient.
 **/
 static Action makeAction(ProcessName.Caps c) {
     return (p){
-        auto a = cast(MobileAmbient)p;
+        debug(Types) {
+          sharedLog.info("Caps action ",c," ",p.name);
+        }
+        auto a = cast(MobileAmbient)p.getLocalAmbient;
         if(a !is null) a.caps ~= c;
     };
 }

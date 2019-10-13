@@ -8,7 +8,7 @@ One of the aims of the project is to perform as much analysis as possible at com
 
 Also included is a runtime model with a rule-set based on the static analyser.
 
-The model represents a virtual ambient machine, and hosts mobile agents that react to conditions in the proccess structure within the ambient simulator.
+The model represents a virtual ambient machine, and hosts mobile agents that react to conditions in the process structure within the ambient simulator.
 
 Co-algebras, typed, secure safe, and boxed, ambients are supported.
 I also want to model the privileges system, and the secret ambients.
@@ -88,6 +88,7 @@ are removed from their parent processes. only the pseudo-tags enter and leave
 and read are processed differently, because they form the building blocks by
 which the other tags exercise the capabilities of their parent processes.
 
+the tag processing occurs in
 
 #### Host ambients
 
@@ -98,9 +99,10 @@ about the host.
 
 
 enter and leave are the only capabilities that do not result in the creation of a
-new software task, and are processed inline by a dedicated machine thread ensuring
+new software task, and are processed inline by a dedicated machine thread (per-host) ensuring
 that mobility is synchronous. The pi states are also updated here, and this
 includes three operations: input, output and extrude.
+
 extrude is a special operation.
 a single visible extrusion (defined by the environment) is exposed to each process.
 the extrude operator returns the name of a pi channel which can then be used to transmit data
@@ -117,6 +119,50 @@ So the output of the join compiler has to allow multiple entry points for each
 function, as well as match against the variety of types which may be passed as
 input tuples by potential users of the functions.
 
+### synchronization of joined and mobile operators
+
+because the joins are processed "inline" (ie by the tag processing thread)
+a method invoked by the join should never block or throw.
+
+the only time a tag may be processed by a thread other than the
+one attached to the tag pool is when an output occurs (from a remote
+  host ambient) and a matching input is waiting in the local host ambient.
+In this case, the input is processed by the remote ambient. However
+it is not customary to modify the process hierarchy during an input,
+the hierarchy could become modified (by the host's own thread) whilst
+the input join is being executed.
+
+so to escape special conditions:
+if a joined method wished to perform external operations such as IO
+which may block, it should do so in a new thread not attached to the
+tagging layer.
+any operation from an IO statement should not affect the hierarchy
+so to perform an operation such as creating a new process, the
+receiver should submit a tag for evaluation by the mobility thread.
+
+tag creation is synchronised and may simply fail, meaning that the
+creation was blocked.
+the pool stores a set of tags for evaluation. these are structured so
+that several mobility operations may be performed in a single cycle.
+
+tag generation starts when a host evaluation method is called.
+tags are created for matching capabilities and stored in the pool.
+if an ambient has a matching 'out' cap, a tag is generated.
+otherwise, it is checked for matching 'in' caps of it's siblings.
+
+when a child ambient enters, the siblings are checked for matching 'in'
+caps.
+
+when an ambient enters a new parent, it's caps are checked for a
+matching 'out'.
+
+if co-caps are enabled, these form part of each check.
+
+pi is checked before and after mobility.
+a waiting input with a matching output is processed first.
+secondly, unmatched outputs are added to the local domain.
+then inputs are added one by one and checked against the
+waiting outputs.
 
 ### Domains, Process Types and Type Constants
 
@@ -332,7 +378,7 @@ Parser and compiler generator
 -----------------------------
 The ambient types match against statements in a defined grammar file, such as a PEG grammar.
 Compilation is done using the ambient flow tracking tool.
-After processing, the output would be the source code for the processes defined in the ambinet logic.
+After processing, the output would be the source code for the processes defined in the ambient logic.
 So the flow analysis helps define which output statements are used for the entities defined in the input to the compiler using the schema defined by the
 grammar, and a set of rules in ambient syntax that define the behaviour of the compiler.
 

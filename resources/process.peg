@@ -27,13 +27,15 @@ ProcessGrammar(CapType="('in' / 'out')"):
 
 	Nesting <- Domain "(" Process ")"
 
-	Ambient <- Name "[" Process? "]"
+	Ambient <- Name AmbientAttr? "[" Process? "]"
+
+	AmbientAttr <- "%" / "#" / "$"
 
 	CapAction <- Capability ("." _Restriction)?
 
-	InputAction <- "(" Name ")" Channel? "." _Restriction
+	InputAction <- Channel "(" Name ("," Name)* ")" "." _Restriction
 
-	OutputAction <- "<" Capability ">" Channel? ("." _Restriction)?
+	OutputAction <- Channel "<" (Capability ("," Capability)* ) ">" ("." _Restriction)?
 
 	Capability <- CapPath / CapEntry
 
@@ -43,7 +45,7 @@ ProcessGrammar(CapType="('in' / 'out')"):
 
   BoundName <- Name "/" Name
 
-  Channel <- ("^" / "|")? Name
+  Channel <- ("^" / "¦")? Name?
 
 	Name <- Domain ( identifier / "*" / "?" )
 
