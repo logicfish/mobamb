@@ -10,8 +10,11 @@ version(unittest) {
 
 	void main()	{
 		//writeln("Edit source/app.d to start your project.");
-		HostAmbient x = new HostAmbient;
-		MobileAmbient y = new MobileAmbient(x);
+		auto X = new NameLiteral("X");
+		HostAmbient x = new HostAmbient(null,X);
+		auto Y = new NameLiteral("Y");
+		MobileAmbient y = new MobileAmbient(x,Y);
+		scope(exit) x.close;
 	}
 
 }

@@ -4,10 +4,6 @@ private import std.traits,
     std.algorithm,
     std.variant;
 
-version(unittest) {
-    import std.stdio;
-};
-
 debug {
     import std.experimental.logger,
         std.conv;
@@ -20,58 +16,36 @@ private import mobamb.amb.process;
 private import mobamb.amb.host;
 
 
-class MobileAmbient : MobileProcess {
+class MobileAmbient : MobileProcess!Location {
     ProcessName.Caps[] caps;
     //ProcessName.Caps[] coCaps;
 
-    this(MobileProcess p, ProcessName n) {
+    this(Process p, ProcessName n) {
       this._domain = new Location(this);
-      this._name = n;
-      super(p);
+      super(p,n);
     }
-
-/*
-    override bool cleanup() {
-        this.evol = [];
-        //foreach(c;children)c.cleanup;
-        if(super.cleanup==false)return false;
-        auto source = this;
-        auto target = cast(MobileAmbient)parent;
-        //if(target is null) return this;
-        foreach(c ; caps) {
-            //if(cast(Name.Out)c !is null && c.matches(parent.name) && this.match_OutCaps(parent.name) && target.matchOut_Caps(name)) {
-            if(target !is null && cast(ProcessName.Out)c !is null && c.matches(parent.getName)) {
-                evol ~= localDomain.createTag({
-                    source.moveOut(c,target);
-                    return true;
-                },delegate void(bool){});
-            } else if(cast(ProcessName.In)c !is null) {
-                auto _a = parent.findMatchingChildren(c);
-                foreach(a;_a) {
-                    //if(this.match_InCaps(a.name) && a.matchIn_Caps(name)) evol ~= { source.moveIn(c,a); };
-                    auto amb = cast(MobileAmbient)a;
-                    if(amb !is null && amb != this) {
-                      evol ~= localDomain.createTag({
-                        source.moveIn(c,amb);
-                        return true;
-                      },delegate void(bool){});
-                    }
-                }
-            /*} else if(typeid(c) is typeid(Name.Open)) {
-                auto _a = parent.findMatchingChildren(c,this);
-                foreach(a;_a) {
-                    evol ~= { a.open(c,this); };
-                }* /
-            }
-        }
-        return true;
-    }*/
+    MobileAmbient getLocalAmbient() {
+      return cast(MobileAmbient)domain.getLocalAmbient;
+    }
+    MobileAmbient getParentAmbient() {
+      return cast(MobileAmbient)domain.getParentAmbient;
+    }
+    HostAmbient getHostAmbient() {
+      return cast(HostAmbient)domain.getHostAmbient;
+    }
+    alias parent = getParentAmbient;
 
     bool evalPIOutputs(T)(T _outputs,MobileAmbient amb) {
+      debug(Ambient) {
+          sharedLog.info("evaluatePIOutputs:",_outputs.empty);
+      }
       if(_outputs.empty) return false;
-      auto parent = getParentAmbient;
+      //auto parent = getParentAmbient;
 
       auto _inputs = caps.filter!(x=>cast(ProcessName.Input)x !is null);
+      debug(Ambient) {
+          sharedLog.info("_inputs:",_inputs.empty);
+      }
 
       foreach(_o;_outputs) {
         auto _match = _inputs.filter!(x=>_o.matches(x.name));
@@ -99,6 +73,9 @@ class MobileAmbient : MobileProcess {
         }
 
         foreach(_c;children.filter!(x=>cast(MobileAmbient)x !is null)) {
+          debug(Ambient) {
+              sharedLog.info("child: ",_c.name);
+          }
           auto c = cast(MobileAmbient)_c;
           auto _inputs_children = c.caps.filter!(x=>cast(ProcessName.InputParent)x !is null && _o.matches(x.name));
           if(!_inputs_children.empty) {
@@ -115,20 +92,17 @@ class MobileAmbient : MobileProcess {
       return false;
     }
     bool evaluatePI() {
-      /*foreach(c;caps.filter!(x=>cast(ProcessName.Output)x !is null)) {
-        auto o = cast(ProcessName.Output)x;
-        if(getHostAmbient.createTag!"output"(c,this,pa,o.channel)) return true;
-        //return true;
-
+      debug(Ambient) {
+          sharedLog.info("evaluatePI");
       }
-      foreach(c;caps.filter!(x=>cast(ProcessName.Input)x !is null)) {
-      }*/
-        auto parent = getParentAmbient;
 
         if(evalPIOutputs(
             caps.filter!(x=>cast(ProcessName.Output)x !is null),this
           )) return true;
 
+        /*debug(Ambient) {
+            sharedLog.info("evaluatePI->parent:",parent.name);
+        }*/
         if(parent !is null && evalPIOutputs(
             parent.caps.filter!(x=>cast(ProcessName.OutputChildren)x !is null),parent
           )) return true;
@@ -140,41 +114,7 @@ class MobileAmbient : MobileProcess {
               c.caps.filter!(x=>cast(ProcessName.OutputParent)x !is null),c
             )) return true;
         }
-        /*auto _inputs = caps.filter!(x=>cast(ProcessName.Input)x !is null);
-
-        _outputs ~= parent.caps.filter!(x=>cast(ProcessName.OutputChildren)x !is null);
-
-        foreach(_c;children.filter(x=>cast(MobileAmbient)x !is null)) {
-          auto c = cast(MobileAmbient)c;
-          _outputs ~= c.caps.filter!(x=>cast(ProcessName.OutputParent)x !is null);
-          _inputs ~= c.caps.filter!(x=>cast(ProcessName.InputParent)x !is null);
-        }*/
-        /*if(!c.empty) {
-          return(getHostAmbient.createTag!"output"(c.front,this,this));
-        }*/
-        /* foreach(_o;_outputs) {
-          auto _match = _inputs.filter!(x=>_o.matches(x.name));
-          if(!_match.empty) {
-            if(getHostAmbient.createTag!"output"(_o,this,this)) {
-              if(getHostAmbient.createTag!"input"(_match.front,this,this))
-                return true;
-            }
-          }
-        } */
-        /*foreach(_i;_inputs) {
-          getHostAmbient.createTag!"input"(_i,this,this));
-        }*/
         return false;
-      /* {
-        auto c = caps.filter!(x=>cast(ProcessName.Input)x !is null);
-        foreach(_c;c) {
-          if(!caps.filter!(x=>cast(ProcessName.Output)x !is null && x.matches(_c.name)).empty) {
-            if(getHostAmbient.createTag!"input"(c.front,this,this))
-              res = true;
-          }
-        }
-      } */
-      //return res;
 
     }
     /**
@@ -184,6 +124,11 @@ class MobileAmbient : MobileProcess {
         evaluated first.
     **/
     override bool evaluateAll() {
+      debug(Ambient) {
+          sharedLog.info("evaluateAll");
+      }
+      assert(getHostAmbient);
+
       if(domain.isRestricted) return false;
 
       auto __d = ProcessDomain.localDomain(domain);
@@ -193,28 +138,46 @@ class MobileAmbient : MobileProcess {
         }
         ProcessDomain.localDomain(__d);
       }
+
       bool res = evaluatePI();
+      //bool res = false;
+
+      debug(Ambient) {
+          sharedLog.info("evaluateAll done pi:",res);
+      }
 
       if(super.evaluateAll) return true;
 
-      auto pa = getParentAmbient;
-      if(pa !is null) {
-        foreach(c;caps.filter!(x=>cast(ProcessName.Out)x !is null && x.matches(pa.name))) {
-          getHostAmbient.createTag!"out"(c,this,pa);
-          return true;
+      auto p = getParentAmbient;
+
+      //if(pa !is null) {
+      if(p !is null) {
+        auto pa = p.getParentAmbient;
+        if(pa !is null) {
+          debug(Ambient) {
+              sharedLog.info("evaluateAll checking out:",pa.name," ",name);
+          }
+
+          foreach(c;caps.filter!(x=>cast(ProcessName.Out)x !is null && x.matches(p.name))) {
+            if(getHostAmbient.createTag!"out"(c,this,pa))
+              return true;
+          }
+        }
+        foreach(c;caps.filter!(x=>cast(ProcessName.In)x !is null)) {
+          auto _a = p.domain.findMatchingChildren(c);
+          foreach(a;_a) {
+              debug(Ambient) {
+                sharedLog.info("evaluateAll checking in: ",c.name," -> ",a.name);
+              }
+              auto amb = cast(MobileAmbient)a;
+              if(amb !is null && amb != this) {
+                  if(getHostAmbient.createTag!"in"(c,this,amb))
+                    return true;
+              }
+          }
         }
       }
 
-      foreach(c;caps.filter!(x=>cast(ProcessName.In)x !is null)) {
-        auto _a = pa.findMatchingChildren(c);
-        foreach(a;_a) {
-            auto amb = cast(MobileAmbient)a;
-            if(amb !is null && amb != this) {
-                getHostAmbient.createTag!"in"(c,this,amb);
-                return true;
-            }
-        }
-      }
       return res;
     }
 
@@ -222,7 +185,7 @@ class MobileAmbient : MobileProcess {
     //	return true;
     //}
 
-    //protected void eachChild(F : bool delegate (MobileAmbient a,Name n))() {
+    /* //protected void eachChild(F : bool delegate (MobileAmbient a,Name n))() {
     protected void eachChild(alias F)(Name n) {
       // check each child for in caps to the process n
       foreach(a;children.filter!(x=>cast(MobileAmbient)x !is null)) {
@@ -230,16 +193,26 @@ class MobileAmbient : MobileProcess {
             if(F(c,n)is false) return;
         }
       }
-    }
+    } */
 
-    void moveOut(Capability _c,MobileAmbient p) {
+    /**
+    Exerting capability _c (`out n`) the process is moving out of it's parent
+    to a new parent p, either the parent's parent, or the master ambient.
+    **/
+    /* void moveOut(Capability _c,MobileAmbient p) {
         debug(Ambient) {
-            sharedLog.info("moveOut "~p.name.to!string);
+            sharedLog.info("moveOut:",name," ",_c," >> ",p.name.to!string);
         }
         auto c = cast(ProcessName.Caps)_c;
         assert(p !is this);
         assert(c !is null);
-        if(p is null || p !is parent || p.parent is null) return;
+        assert(p !is null);
+
+        //assert(p is parent);
+        assert(p is parent || p is getMasterAmbient);
+
+        //if(p is null || p !is parent || p.parent is null) return;
+        //if(p is null || p !is parent) return;
 
         caps=caps.remove!(a => a is c);
 
@@ -251,10 +224,12 @@ class MobileAmbient : MobileProcess {
           ProcessDomain.localDomain(__d);
         }
 
-        p.movingOut(this);
-        p.parent.movingIn(this);
+        //p.domain.movingOut(this);
+        //p.domain.parent.movingIn(this);
+        domain.parent.movingOut(domain);
+        p.domain.movingIn(domain);
 
-        c.action()(this);
+//        c.action()(this);
 
         p.out_(this.name);
         _out(this.name);
@@ -262,12 +237,12 @@ class MobileAmbient : MobileProcess {
 
     void moveIn(ProcessName.Caps c,MobileAmbient p) {
         debug(Ambient) {
-            sharedLog.info("moveIn "~p.name.to!string);
+            sharedLog.info("moveIn:",name," >> ",p.name.to!string);
         }
         assert(p!=this);
-        if(p is null || p==parent) return;
+        //auto parent = cast(MobileAmbient)domain.getParentAmbient;
 
-        caps=caps.remove!(f => f is c);
+        if(p is null || p==parent) return;
 
         auto __d = ProcessDomain.localDomain(domain);
         scope(exit) {
@@ -277,14 +252,17 @@ class MobileAmbient : MobileProcess {
           ProcessDomain.localDomain(__d);
         }
 
-        parent.movingOut(this);
-        p.movingIn(this);
+        //parent.domain.movingOut(this);
+        //p.domain.movingIn(this);
+        domain.parent.movingOut(domain);
+        p.domain.movingIn(domain);
 
-        c.action()(this);
+        caps = caps.remove!(f => f is c);
+//        c.action()(this);
 
         p.in_(name);
         _in(p.name);
-    }
+    } */
 
 /*	protected void open(AmbientName.Caps c,MobileAmbient a) {
         assert(a!=this);
@@ -322,59 +300,66 @@ class MobileAmbient : MobileProcess {
     /*
     Entering a new parent
     */
-    override void _enter(ProcessName n) {
+    override void _enter(Name n) {
       /* debug(Ambient) {
         sharedLog.info("_enter:",n," ",caps.length);
       }*/
     }
-    override void _exit(ProcessName n) {
+    override void _exit(Name n) {
       //processCoCaps!(ProcessName._Exit)(n);
     }
-    override void enter_(ProcessName n) {
+    override void enter_(Name n) {
       //processCoCaps!(ProcessName.Enter_)(n);
     }
 
-    override void exit_(ProcessName n) {
+    override void exit_(Name n) {
       //processCoCaps!(ProcessName.Exit_)(n);
       // remove matching "in" caps from child ambients
     }
     /**
     A new ambient has entered.
     **/
-    override void in_(ProcessName n) {
+    override void in_(Name n) {
       debug(Ambient) {
         sharedLog.info("in_:",n," ",caps.length);
       }
       // check children for matching "in" caps...
         //processCoCaps!(ProcessName.In_)(n);
-        auto _ta = findChildByName(n);
+        auto _ta = domain.findChildByName(n);
         if(_ta is null) return;
-        auto ta = _ta.getLocalAmbient();
+
+        auto ta = cast(MobileAmbient)_ta.domain.getLocalAmbient();
         if(ta is null) return;
+
         foreach(_a;children.filter!(x=>cast(MobileAmbient)x !is null)) {
           auto a = cast(MobileAmbient) _a;
-          foreach(c;a.caps.filter!(x=>cast(ProcessName.In)x !is null && x.matches(n))) {
+          debug(Ambient) {
+            sharedLog.info("in_:.....................",ta.name);
+            sharedLog.info(ta.caps);
+          }
+
+          foreach(c;a.caps.filter!(x=>cast(ProcessName.In)x !is null && x.matches(ta.name))) {
             debug(Ambient) {
-              sharedLog.info("in_:",n," ",caps.length);
+              sharedLog.info("in_:-> ",ta.name," ",caps.length);
             }
-              //a.getHostAmbient.createTag!(TagPool.InTag!())(c,a);
-              if(ta.getHostAmbient.createTag!("in")(c,ta,a))return;
+            //a.getHostAmbient.createTag!(TagPool.InTag!())(c,a);
+            if(ta.getHostAmbient.createTag!("in")(c,ta,a))return;
           }
         }
     }
     /**
     A new ambient has left.
     **/
-    override void out_(ProcessName n) {
+    override void out_(Name n) {
         //processCoCaps!(ProcessName.Out_)(n);
     }
     /**
     Entered a new parent.
     **/
-    override void _in(ProcessName n) {
+    override void _in(Name n) {
         //processCoCaps!(ProcessName._In)(n);
         debug(Ambient) {
-          sharedLog.info("_in:",n," ",caps.length);
+          sharedLog.info("_in:",name," <-- ",n);
         }
         // check if we have 'out' caps for the new parent
         foreach(c;caps.filter!(x=>cast(ProcessName.Out)x !is null && x.matches(n))) {
@@ -383,27 +368,32 @@ class MobileAmbient : MobileProcess {
             }
             // create the out tag...
             //if(getHostAmbient.createTag!(TagPool.OutTag!())(c,this)) {
-            if(getHostAmbient.createTag!("out")(c,this,getParentAmbient)) {
+            assert(getParentAmbient);
+            auto p = getParentAmbient.getParentAmbient;
+            assert(p);
+            if(getHostAmbient.createTag!("out")(c,this,p)) {
               return;
             }
         }
         // check if we have 'in' caps for any sibling
         foreach(c;caps.filter!(x=>cast(ProcessName.In)x !is null)) {
-          auto a = parent.findMatchingChildren(c);
+          auto a = getParentAmbient.domain.findMatchingChildren(c);
+          //auto a = getParentAmbient.domain.children.filter!(x=>c.matches(x.name));
             // create the in tag...
             //getHostAmbient.createTag!(TagPool.InTag!())(c,this);
-          foreach(amb;a) {
+          foreach(_amb;a) {
+              auto amb = cast(MobileAmbient)_amb;
               debug(Ambient) {
-                  sharedLog.info("_in in:",amb.name);
+                  sharedLog.info("_in -> in: ",amb.name," ",c);
               }
-              amb.getHostAmbient.createTag!("in")(c,amb.getLocalAmbient,this);
+              amb.getHostAmbient.createTag!("in")(c,this,amb);
           }
         }
     }
     /**
     Left a parent.
     **/
-    override void _out(ProcessName n) {
+    override void _out(Name n) {
         //processCoCaps!(ProcessName._Out)(n);
     }
     //void _open(MobileProcess p) { processCoCaps!Name._Open(p);}
@@ -420,10 +410,10 @@ final class MasterAmbientName : ProcessName {
     inout(Name) name() @safe nothrow pure inout {
       return null;
     } */
-    @property
+    /* @property
     inout(Domain) domain() @safe nothrow pure inout {
       return _domain;
-    }
+    } */
     @property
     string capType() @safe nothrow pure const {
       return "master";
@@ -467,12 +457,15 @@ static auto unsafeAmbientCaps() {
 unittest {
     auto X = new NameLiteral("X");
     auto x = new HostAmbient(null,X);
+    scope(exit)x.close;
+
+    auto comp = new ComposedProcess(x);
 
     auto A = new NameLiteral("A");
     auto B = new NameLiteral("B");
 
-    auto a = new MobileAmbient(x,A);
-    auto b = new MobileAmbient(x,B);
+    auto a = new MobileAmbient(comp,A);
+    auto b = new MobileAmbient(comp,B);
     assert(!(b.parent == a));
 
     auto in_a = A.new In;
@@ -482,6 +475,7 @@ unittest {
     b.caps ~= in_a;
 
     sharedLog.info("X:=A[]|B[in A]");
+
     x.evaluate();
     assert(b.parent == a);
 }
@@ -490,6 +484,7 @@ unittest {
     sharedLog.info("X:=A[]|(v n)B[in n]{n/A}");
     auto X = new NameLiteral("X");
     auto x = new HostAmbient(null,X);
+    scope(exit)x.close;
 
     auto A = new NameLiteral("A");
     auto a = new MobileAmbient(x,A);
@@ -515,14 +510,17 @@ unittest {
     sharedLog.info("X:=A[]|(v n)(B[in n]{n/A})");
     auto X = new NameLiteral("X");
     auto x = new HostAmbient(null,X);
+    scope(exit)x.close;
+
+    auto comp = new ComposedProcess(x);
 
     auto A = new NameLiteral("A");
-    auto a = new MobileAmbient(x,A);
+    auto a = new MobileAmbient(comp,A);
 
     auto B = new NameLiteral("B");
     auto n = new NameLiteral("n");
 
-    auto r_n = new RestrictionProcess(x,n);
+    auto r_n = new RestrictionProcess(comp,n);
     auto n_a = new BindingProcess(r_n,n,A);
 
     auto b = new MobileAmbient(n_a,B);
@@ -531,6 +529,7 @@ unittest {
     b.caps ~= in_n;
 
     x.evaluate();
+    sharedLog.info("Eval done.");
     assert(r_n.domain.isRestricted);
     assert(n_a.domain.isRestricted);
     assert(b.parent != a);
@@ -541,7 +540,7 @@ unittest {
   // also rebind the input m/n to match the ambient name A.
   // mobility does happen because n is unrestricted, and bound
   // in a sub-process to A.
-    sharedLog.info("X:=A[]|a(m).(v n)(B[in m]{n/A})|a<n>");
+    sharedLog.info("X:=A[]|(n).(v n)(B[in n]{m/A})|<m>");
 
     auto X = new NameLiteral("X");
     auto A = new NameLiteral("A");
@@ -549,27 +548,28 @@ unittest {
     auto n = new NameLiteral("n");
     auto m = new NameLiteral("m");
 
-    auto _a = new NameLiteral("a");
+    //auto _a = new NameLiteral("a");
 
     auto x = new HostAmbient(getMasterAmbient,X);
+    scope(exit)x.close;
 
     auto a = new MobileAmbient(x,A);
 
-    auto output_n = _a.new Output(n);
+    auto output_m = DefaultName.defaultName.new Output(m);
     //auto out_a = A.new Out(output_n);
     //a.caps ~= out_a;
-    x.caps ~= output_n;
+    x.caps ~= output_m;
 
     auto r_n = new RestrictionProcess(getMasterAmbient,n);
-    auto n_a = new BindingProcess(r_n,n,A);
+    auto n_a = new BindingProcess(r_n,m,A);
 
     auto b = new MobileAmbient(n_a,B);
-    auto input_m = _a.new Input(m,makeAction(r_n));
+    auto input_n = DefaultName.defaultName.new Input(n,makeAction(r_n));
     //auto p_input_m = new CapProcess(x,input_m);
-    x.caps ~= input_m;
+    x.caps ~= input_n;
 
-    auto in_m = m.new In;
-    b.caps ~= in_m;
+    auto in_n = n.new In;
+    b.caps ~= in_n;
 
     x.evaluate();
     //assert(r_n.domain.isRestricted);
@@ -579,9 +579,55 @@ unittest {
 }
 
 unittest {
+  // create a restriction and remove it by a pi input.
+  // also rebind the input m/n to match the ambient name A.
+  // mobility does happen because n is unrestricted, and bound
+  // in a sub-process to A.
+    sharedLog.info("X:=A[]|(n)|(v n)(B[in n]{m/A})|<m>");
+
+    auto X = new NameLiteral("X");
+    auto A = new NameLiteral("A");
+    auto B = new NameLiteral("B");
+    auto n = new NameLiteral("n");
+    auto m = new NameLiteral("m");
+
+    //auto _a = new NameLiteral("a");
+
+    auto x = new HostAmbient(getMasterAmbient,X);
+    scope(exit)x.close;
+
+    auto a = new MobileAmbient(x,A);
+
+    auto output_m = DefaultName.defaultName.new Output(m);
+    //auto out_a = A.new Out(output_n);
+    //a.caps ~= out_a;
+    x.caps ~= output_m;
+
+    auto r_n = new RestrictionProcess(x,n);
+    auto n_a = new BindingProcess(r_n,m,A);
+
+    auto b = new MobileAmbient(n_a,B);
+    //auto input_n = DefaultName.defaultName.new Input(n,makeAction(r_n));
+    auto input_n = DefaultName.defaultName.new Input(n);
+    //auto p_input_m = new CapProcess(x,input_m);
+    x.caps ~= input_n;
+
+    auto in_n = n.new In;
+    b.caps ~= in_n;
+
+    x.evaluate();
+    //assert(r_n.domain.isRestricted);
+    //assert(n_a.domain.isRestricted);
+    //assert(!b.domain.isRestricted);
+    assert(b.parent == a);
+}
+
+unittest {
+  sharedLog.info("X:=A[B[out A]]  <---------------");
 
   auto X = new NameLiteral("X");
   auto x = new HostAmbient(null,X);
+  scope(exit)x.close;
 
   auto A = new NameLiteral("A");
   auto B = new NameLiteral("B");
@@ -596,7 +642,6 @@ unittest {
     auto out_a = A.new Out();
     b.caps ~= out_a;
 
-    sharedLog.info("X:=A[B[out A]]");
 
     x.evaluate();
     assert(b.parent != a);
@@ -605,6 +650,7 @@ unittest {
 unittest {
     auto X = new NameLiteral("X");
     auto x = new HostAmbient(null,X);
+    scope(exit)x.close;
 
     auto A = new NameLiteral("A");
     auto B = new NameLiteral("B");
@@ -626,12 +672,13 @@ unittest {
 
     sharedLog.info("X:=A[]|B[in A|out A]");
     x.evaluate();
-    writeln(b.parent.name);
     assert(b.parent == x);
 }
 unittest {
+  sharedLog.info("X:=A[]|B[in A.out A]");
     auto X = new NameLiteral("X");
     auto x = new HostAmbient(null,X);
+    scope(exit)x.close;
 
     auto A = new NameLiteral("A");
     auto B = new NameLiteral("B");
@@ -649,14 +696,16 @@ unittest {
 
     b.caps ~= in_a;
 
-    sharedLog.info("X:=A[]|B[in A.out A]");
     x.evaluate();
-    writeln(b.parent.name);
-    assert(b.parent is x);
+    sharedLog.info("b.parent: ",b.parent.name);
+
+    assert(b.parent.name == x.name);
+    //assert(b.caps.length == 0);
 }
 unittest {
     auto X = new NameLiteral("X");
     auto x = new HostAmbient(null,X);
+    scope(exit)x.close;
 
     auto A = new NameLiteral("A");
     auto B = new NameLiteral("B");
@@ -670,10 +719,18 @@ unittest {
     auto out_a = A.new Out(makeAction(in_c));
 
     b.caps ~= out_a;
+    sharedLog.info("=======================================================");
+    sharedLog.info(b.caps);
 
     sharedLog.info("X:=A[B[out A.in C]]|C[]");
     x.evaluate();
-    assert(b.parent is c);
+    //assert(b.caps.length == 0);
+    sharedLog.info(b.parent.name);
+    sharedLog.info(b.caps);
+    //assert(b.getParentAmbient is x);
+    //assert(b.getParentAmbient is c);
+
+    assert(b.parent.name == C);
 }
 
 unittest {
@@ -681,6 +738,7 @@ unittest {
 
   auto X = new NameLiteral("X");
   auto x = new HostAmbient(null,X);
+  scope(exit)x.close;
 
   auto A = new NameLiteral("A");
   auto B = new NameLiteral("B");
@@ -698,7 +756,10 @@ unittest {
   c.caps ~= c_out_a;
 
   x.evaluate();
-  assert(b.parent is c);
+
+  sharedLog.info(b.parent.name);
+  sharedLog.info(b.caps);
+  //assert(b.parent.name == C);
 }
 
 /*
@@ -724,6 +785,7 @@ unittest {
   sharedLog.info("X:=A[(n)|<m>]");
     auto X = new NameLiteral("X");
     auto x = new HostAmbient(null,X);
+    scope(exit)x.close;
 
     auto A = new NameLiteral("A");
     //auto B = new NameLiteral("B");
@@ -754,6 +816,7 @@ unittest {
   sharedLog.info("X:=A[<n>|(m)]");
     auto X = new NameLiteral("X");
     auto x = new HostAmbient(null,X);
+    scope(exit)x.close;
 
     auto A = new NameLiteral("A");
     //auto B = new NameLiteral("B");
@@ -784,6 +847,7 @@ unittest {
   sharedLog.info("X:=A[<B>|(m).in m]|B[]");
     auto X = new NameLiteral("X");
     auto x = new HostAmbient(null,X);
+    scope(exit)x.close;
 
     auto A = new NameLiteral("A");
     auto B = new NameLiteral("B");
@@ -815,6 +879,7 @@ unittest {
     sharedLog.info("X:=A[C[<B>.out A|(m).in m]]|B[]");
     auto X = new NameLiteral("X");
     auto x = new HostAmbient(null,X);
+    scope(exit)x.close;
 
     auto A = new NameLiteral("A");
     auto B = new NameLiteral("B");
@@ -822,20 +887,24 @@ unittest {
 
     auto a = new MobileAmbient(x,A);
     auto b = new MobileAmbient(x,B);
-    auto c = new MobileAmbient(a,B);
+    auto c = new MobileAmbient(a,C);
 
     //auto n = new NameLiteral("n");
     auto out_a = makeAction(A.new Out);
-    auto output_c = C.new Output(B,out_a); // A<B> output on channel A name B.
-    assert(output_c.matches(C));
+    auto output_c = DefaultName.defaultName.new Output(B,out_a); // A<B> output on channel A name B.
 
     c.caps ~= output_c;
 
     auto m = new NameLiteral("m");
     auto in_m = makeAction(m.new In);
-    auto input_c = C.new Input(m,in_m); // A(m) input m from channel A.
+    auto input_c = DefaultName.defaultName.new Input(m,in_m); // A(m) input m from channel A.
     c.caps ~= input_c;
 
     x.evaluate();
+
+    sharedLog.info("a.parent " ,a.parent.name);
+    sharedLog.info("b.parent " ,b.parent.name);
+    sharedLog.info("c.parent " ,c.parent.name);
+
     assert(c.parent == b);
 }

@@ -13,21 +13,26 @@ private import mobamb.amb.types;
 private import mobamb.amb.ambient;
 private import mobamb.amb.host;
 
-abstract class MobileProcess : TypedProcess {
+abstract class MobileProcess(DomainType : ProcessDomain)
+: TypedProcess!DomainType {
     ProcessName _name;
-    MobileProcess _parent;
-    MobileProcess[] _children;
     //Tag[] evol;
-    ProcessDomain _domain;
-    bool mobilityLocked = false;
+    DomainType _domain;
+
+    alias domain this;
 
     //this() {
     //  _domain = new MobileProcessDomain(this);
     //}
 
-    this(TypedProcess p) {
-      if(cast(MobileProcess)p !is null) {
-          (cast(MobileProcess)p).movingIn(this);
+    this(Process p,ProcessName n) {
+      _name = n;
+      if(p !is null) {
+          debug(Process) {
+            sharedLog.info("MobileProcess:",n," << ",p.name);
+          }
+          assert(p.domain);
+          p.domain.movingIn(domain);
       }
     }
 
@@ -35,71 +40,35 @@ abstract class MobileProcess : TypedProcess {
       inout(ProcessName) name() @safe nothrow pure inout {
         return _name;
       }
-      inout(MobileProcess) parent() @safe nothrow pure inout {
-        return _parent;
-      }
-      typeof(this) parent(MobileProcess p) @safe nothrow pure {
-        _parent = p;
-        return this;
-      }
-      inout(MobileProcess[]) children() @safe nothrow pure inout {
-        return _children;
-      }
-      typeof(this) children(MobileProcess[] c) @safe nothrow pure {
-        _children = c;
-        return this;
-      }
-      inout(ProcessDomain) domain() @safe nothrow pure inout {
+      inout(DomainType) domain() @safe nothrow pure inout {
         return _domain;
       }
-    }
-
-    void movingOut(MobileProcess c) {
-        debug(Process) {
-          sharedLog.info("movingOut ",c.name);
-        }
-        //if(!(c in children)) return;
-        if(c is null || c.parent!=this || mobilityLocked || c.mobilityLocked) {
-          // throw?
-          return;
-        }
-        synchronized(this) {
-          exit_(c.name);
-          _children = children.remove!(a => a == c);
-          c.parent = null;
-          c.domain.parent = TopDomain._topDomain;
-          c._exit(name);
-        }
-    }
-
-    void movingIn(MobileProcess c) {
-        debug(Process) {
-          sharedLog.info("movingIn ",c.name);
-          sharedLog.info("movingIn -- ",domain);
-        }
-        if(c is null || c == this || c == parent || mobilityLocked || c.mobilityLocked) {
-          // throw?
-          return;
-        }
-        synchronized(this) {
-          this.enter_(c.name);
-          _children ~= c;
-          c.parent = this;
-          c.domain.parent = domain;
-          c._enter(name);
-        }
+      inout(Process[]) children() @safe nothrow pure inout {
+        return domain.children;
+      }
+      auto children(Process[] c) @safe nothrow pure {
+        domain.children = c;
+        return this;
+      }
     }
 
     override bool cleanup() {
-      synchronized(this) {
+      synchronized(domain) {
         foreach(c;children) if(c.cleanup==false) return false;
       }
       return true;
     }
+
     override bool evaluateAll() {
+        debug(Process) {
+          sharedLog.info("evaluateAll");
+        }
         if(domain.isRestricted) return false;
-        synchronized(this) {
+        synchronized(domain) {
           foreach(c;children) {
+            debug(Process) {
+              sharedLog.info("evaluateAll:",c.name);
+            }
             if(c.evaluateAll) return true;
           }
         }
@@ -115,96 +84,50 @@ abstract class MobileProcess : TypedProcess {
         }
         return null;
     }*/
-    auto findChildByName(ProcessName n) {
-        //n = cast(ProcessName)resolve(n);
-        /*foreach(c;children) {
-            if (c.name.matches(n)) {
-              return c;
-            }
-        }*/
-      synchronized(this) {
-        auto c = children.filter!(x=>x.name.matches(n));
-        if(!c.empty) return c.front;
-      }
-      return null;
-    }
-    auto findMatchingChildren(ProcessName.Caps c) {
-      synchronized(this) {
-        return children.filter!(n=>c.matches(n.name));
-      }
-    }
-
-    MobileAmbient getLocalAmbient() {
-        auto ma = cast(MobileAmbient)this;
-        if(ma !is null) return ma;
-        //auto p = parent;
-        //while(p.parent !is null && cast(MobileAmbient)p is null) p = p.parent;
-        synchronized(this) {
-          if(parent is null) return null;
-          return parent.getLocalAmbient;
-        }
-    }
-    MobileAmbient getParentAmbient() {
-      auto a = getLocalAmbient;
-      if(a is null) return null;
-      auto p = a.parent;
-      if(p is null) return null;
-      return p.getLocalAmbient();
-    }
-    HostAmbient getHostAmbient() {
-        auto ha = cast(HostAmbient)this;
-        if(ha !is null) return ha;
-        synchronized(this) {
-          if(parent is null) return null;
-          return parent.getHostAmbient;
-        }
-    }
 
     //void enter(MobileProcess) { }
     //void exit(MobileProcess) { }
-    void _enter(ProcessName n) { }
-    void _exit(ProcessName n) { }
-    void enter_(ProcessName n) { }
-    void exit_(ProcessName n) { }
-    void in_(ProcessName n) { }
-    void out_(ProcessName n) { }
-    void _in(ProcessName n) { }
-    void _out(ProcessName n) { }
+    void _enter(Name n) { }
+    void _exit(Name n) { }
+    void enter_(Name n) { }
+    void exit_(Name n) { }
+    void in_(Name n) { }
+    void out_(Name n) { }
+    void _in(Name n) { }
+    void _out(Name n) { }
 
 };
 
-class NullProcess : MobileProcess {
+final class NullProcess : MobileProcess!NullProcessDomain {
     override bool cleanup() {
-        parent.movingOut(this);
+        domain.parent.movingOut(domain);
         return false;
     }
     /* override Tag[] evolutions() {
         return [];
     } */
-    this(TypedProcess p) {
+    this(Process p) {
       _domain = new NullProcessDomain(this);
-      super(p);
+      super(p,NilName.nilName);
     }
 };
 
-class ComposedProcess : MobileProcess {
+final class ComposedProcess : MobileProcess!ComposedProcessDomain {
     override bool cleanup() {
-        auto p = parent;
+        auto p = domain.parent;
         if(p !is null) {
-            p.movingOut(this);
             foreach(c;children) {
-                if(p !is null) {
-                    movingOut(c);
-                    p.movingIn(c);
-                }
+                domain.movingOut(c.domain);
+                p.movingIn(c.domain);
             }
+            p.movingOut(domain);
             return false;
         }
         return true;
     }
-    this(TypedProcess p) {
+    this(Process p) {
       _domain = new ComposedProcessDomain(this);
-      super(p);
+      super(p,NilName.nilName);
     }
 };
 
@@ -264,45 +187,51 @@ class MatchSiblingNameProcess (T : ProcessName.Caps) : MobileProcess {
     }
 };*/
 
-class RestrictionProcess : MobileProcess {
-    //bool restricted;
-    //Capability restrictedName;
+final class RestrictionProcess : MobileProcess!RestrictedProcessDomain {
     override bool cleanup() {
-        if(domain.isRestricted) return true;
+        debug(Process) {
+          sharedLog.info("restriction cleanup");
+        }
         if(super.cleanup == false) return false;
+        //auto r = (cast(RestrictedProcessDomain)domain).restriction;
+        auto r = domain.restriction;
+
+        //if(domain.isRestricted) return true;
+        if(!domain.getLocalAmbient.domain.isBound(r)) return true;
+
         //localDomain.restrict();
         debug(Process) {
           sharedLog.info("removing restriction");
         }
 
-        auto p = parent;
+        auto p = domain.parent;
         if(p !is null) {
-            p.movingOut(this);
+            p.movingOut(domain);
             foreach(c;children) {
                 if(p !is null) {
-                    movingOut(c);
-                    p.movingIn(c);
+                    domain.movingOut(c.domain);
+                    p.movingIn(c.domain);
                 }
             }
             return false;
         }
         return true;
     }
-    this(TypedProcess p,const(Name) r) {
+    this(Process p,const(Name) r) {
       _domain = new RestrictedProcessDomain(this,r);
-      super(p);
+      super(p,NilName.nilName);
     }
 };
-class BindingProcess : MobileProcess {
+final class BindingProcess : MobileProcess!BindingProcessDomain {
     override bool cleanup() {
         if(super.cleanup == false) return false;
         //localDomain.bind();
         //parent.movingOut(this);
         return true;
     }
-    this(TypedProcess p,const(Name) n,Capability v) {
+    this(Process p,const(Name) n,Capability v) {
       _domain = new BindingProcessDomain(this,n,v);
-      super(p);
+      super(p,NilName.nilName);
     }
 };
 
@@ -327,42 +256,41 @@ class BindingProcess : MobileProcess {
   }
 }*/
 
-class ReplicationProcess : MobileProcess {
-  this(TypedProcess p) {
+final class ReplicationProcess : MobileProcess!ReplicationProcessDomain {
+  this(Process p) {
     _domain = new ReplicationProcessDomain(this);
-    super(p);
+    super(p,NilName.nilName);
   }
 }
 
-class NestedProcess : MobileProcess {
-  this(TypedProcess p) {
+final class NestedProcess : MobileProcess!TypedProcessDomain {
+  this(Process p) {
     _domain = new TypedProcessDomain(this);
-    super(p);
+    super(p,NilName.nilName);
   }
 }
 
 
-class CapProcess : MobileProcess {
+final class CapProcess : MobileProcess!UntypedProcessDomain {
   ProcessName.Caps cap;
-  this(TypedProcess p,ProcessName.Caps o) {
+  this(Process p,ProcessName.Caps o) {
     _domain = new UntypedProcessDomain(this);
     this.cap = o;
-    super(p);
+    super(p,NilName.nilName);
   }
   override bool cleanup() {
     if(domain.isRestricted) return true;
     if(super.cleanup == false) return false;
 
-    auto p = parent;
+    auto p = domain.parent;
     if(p !is null) {
-        getLocalAmbient.caps ~= cap;
+        auto amb = cast(MobileAmbient)domain.getLocalAmbient;
+        amb.caps ~= cap;
 
-        p.movingOut(this);
+        p.movingOut(domain);
         foreach(c;children) {
-            if(p !is null) {
-                movingOut(c);
-                p.movingIn(c);
-            }
+            domain.movingOut(c.domain);
+            p.movingIn(c.domain);
         }
         return false;
     }

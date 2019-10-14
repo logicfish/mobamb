@@ -5,8 +5,9 @@ private import std.algorithm,
     std.range;
 
 private import mobamb.amb.domain;
-private import mobamb.amb.ambient;
 private import mobamb.amb.names;
+private import mobamb.amb.ambient;
+private import mobamb.amb.host;
 
 debug {
     import std.experimental.logger;
@@ -63,19 +64,21 @@ class TagPool {
     static void _execute(_Tag t) {
         auto __d = ProcessDomain.localDomain(t.ambient.domain);
         scope(exit) {
-          debug(Tagging) {
-              sharedLog.info("restore domain ",__d);
-          }
           ProcessDomain.localDomain(__d);
         }
         bool b = _exec(t);
         t.outer.closeTag(t,b);
     }
     void evaluate() {
-        _taskPool.put(task!_execute(this));
+      auto t = task!_execute(this);
+      _taskPool.put(t);
+      t.yieldForce;
     }
     void close(bool f) {
       _close(this,f);
+      _lemma = null;
+      _ambient = null;
+      _target = null;
     }
   }
   /**
@@ -98,15 +101,21 @@ class TagPool {
   final class _EnterTag : SyncTag!(function bool(Tag x) {
     // _exec function for _enter.
     debug(Tagging) {
-        sharedLog.info("_EnterTag "~ x.ambient.name.to!string);
-        sharedLog.info("_EnterTag --> "~ x.target.name.to!string);
+        sharedLog.info("_EnterTag ", x.ambient.name.to!string, " >> ",x.target.name);
+        sharedLog.info("_EnterTag --> ", x.lemma);
     }
-    x.ambient.moveIn(cast(ProcessName.Caps)x.lemma,x.target);
+    //x.ambient.moveIn(cast(ProcessName.Caps)x.lemma,x.target);
+    x.target.domain.movingIn(x.ambient.domain);
+    x.ambient.caps=x.ambient.caps.remove!(f => f == x.lemma);
+    (cast(ProcessName.Caps)x.lemma).action()(x.ambient);
     return true;
   },(x,f) {
+    debug(Tagging) {
+        sharedLog.info("_EnterTag closing ",x.ambient.name.to!string," ",f);
+    }
     if(f) {
-        // look for any siblings matching 'in' tags
-        // look for a matching 'out' tag...
+      x.target.in_(x.ambient.name);
+      x.ambient._in(x.target.name);
     }
   }) {}
 
@@ -114,13 +123,23 @@ class TagPool {
     // _exec function for _leave.
     debug(Tagging) {
         sharedLog.info("_LeaveTag " ~ x.ambient.name.to!string);
-        sharedLog.info("_LeaveTag --> "~ x.target.name.to!string);
+        //sharedLog.info("_LeaveTag --> "~ x.target.name.to!string);
+        sharedLog.info("_LeaveTag --> ",x.lemma);
     }
-    x.ambient.moveOut(cast(ProcessName.Caps)x.lemma,x.target);
-    //x.ambient.moveOut(cast(ProcessName.Caps)x.lemma,x.ambient.getParentAmbient);
+    //x.ambient.moveOut(cast(ProcessName.Caps)x.lemma,x.target);
+    x.ambient.parent.domain.movingOut(x.ambient.domain);
     return true;
-  },(x,f){
-  }) {}
+  },(x,f) {
+    if(f) {
+      debug(Tagging) {
+          sharedLog.info("_LeaveTag closing ",x.ambient.name.to!string," ",f);
+      }
+      // target is the previous parent
+      x.target.out_(x.ambient.name);
+      x.ambient._out(x.target.name);
+    }
+  }) {
+  }
 
   abstract class SyncIOTag(alias _exec,alias _close) : SyncTag!(_exec,_close)
   {
@@ -134,10 +153,12 @@ class TagPool {
     return t.ambient.domain.input(t.lemma);
   },(t,f) {
     if(f) {
-      auto _t = task!((Tag t){
-        t.ambient.caps = t.ambient.caps.remove!(x => x == t.lemma);
+      /*auto _task = task!((Tag _t) {
+        _t.ambient.caps = _t.ambient.caps.remove!(x => x == _t.lemma);
       })(t);
-      t.ambient.getHostAmbient.put!(typeof(_t))(_t);
+      auto ha = cast(HostAmbient)t.ambient.domain.getHostAmbient;
+      ha.put!(typeof(_task))(_task);*/
+      t.ambient.caps = t.ambient.caps.remove!(x => x == t.lemma);
     }
   }) {
   }
@@ -152,6 +173,50 @@ class TagPool {
   },(t,f){
     if(f) {
       t.ambient.caps = t.ambient.caps.remove!(x => x == t.lemma);
+    }
+  }) {
+  }
+
+/*  final class _ConstructorTag() : AsyncTag!(x=>{
+    return true;
+  },(x,f)=>{}) {} */
+
+  final class InTag() : AsyncTag!((Tag x) {
+    //auto p = x.ambient.getParentAmbient();
+    //if(p is null) return false;
+    //auto t = cast(MobileAmbient)x.ambient.getParentAmbient.findChildByName(cast(ProcessName)x.lemma.);
+    //if(t is null) return false;
+    /* x.ambient.getHostAmbient.createTag!(_LeaveTag)(x.lemma,x.ambient,x.ambient.parent);
+    x.target.getHostAmbient.createTag!(_EnterTag)(x.lemma,x.ambient,x.target); */
+    return true;
+  },(Tag x,bool f) {
+    if(f) {
+      x.ambient.getHostAmbient.createTag!(_LeaveTag)(x.lemma,x.ambient,x.ambient.parent);
+      x.target.getHostAmbient.createTag!(_EnterTag)(x.lemma,x.ambient,x.target);
+    }
+  }) {
+  }
+
+  final class OutTag() : AsyncTag!((Tag x){
+    //auto p = x.ambient.getParentAmbient();
+    //if(p is null) return false;
+
+    /* auto _p = _p.getParentAmbient;
+    if(_p is null) return false; */
+
+    //auto p = x.ambient.parent;
+    /* auto p = x.target;
+    if(p is null) return false;
+    auto t = p.getParentAmbient;
+    //auto t = x.target;
+    if(t is null) return false; */
+    /* x.ambient.getHostAmbient.createTag!(_LeaveTag)(x.lemma,x.ambient,x.ambient.parent);
+    t.getHostAmbient.createTag!(_EnterTag)(x.lemma,x.ambient,x.target); */
+    return true;
+  },(Tag x,bool f) {
+    if(f) {
+      x.ambient.getHostAmbient.createTag!(_LeaveTag)(x.lemma,x.ambient,x.ambient.parent);
+      x.target.getHostAmbient.createTag!(_EnterTag)(x.lemma,x.ambient,x.target);
     }
   }) {
   }
@@ -177,39 +242,6 @@ class TagPool {
   },(x,f)=>{}) {
   }
 
-/*  final class _ConstructorTag() : AsyncTag!(x=>{
-    return true;
-  },(x,f)=>{}) {} */
-
-  final class InTag() : AsyncTag!((Tag x) {
-    auto p = x.ambient.getParentAmbient();
-    if(p is null) return false;
-    //auto t = cast(MobileAmbient)x.ambient.getParentAmbient.findChildByName(cast(ProcessName)x.lemma.);
-    //if(t is null) return false;
-    x.ambient.getHostAmbient.createTag!(_LeaveTag)(x.lemma,x.ambient,p);
-    x.target.getHostAmbient.createTag!(_EnterTag)(x.lemma,x.ambient,x.target);
-    return true;
-  },(Tag x,bool f) {
-  }) {
-  }
-
-  final class OutTag() : AsyncTag!((Tag x){
-    //auto p = x.ambient.getParentAmbient();
-    //auto p = x.ambient.parent;
-    auto p = x.target;
-    if(p is null) return false;
-    auto t = p.getParentAmbient;
-    //auto t = x.target;
-    if(t is null) return false;
-    x.ambient.getHostAmbient.createTag!(_LeaveTag)(x.lemma,x.ambient,p);
-    t.getHostAmbient.createTag!(_EnterTag)(x.lemma,x.ambient,t);
-    return true;
-  },(Tag x,bool f) {
-    /*if(f) {
-      _outTag = null;
-    }*/
-  }) {
-  }
 
 // Tags hashed by the source process name.
   //Tag[] tags;
@@ -226,11 +258,11 @@ class TagPool {
       a.deleteTag(t);
       t.close(f);
     }))(t,f))();*/
-    auto a = task!(function void(Tag t,bool f){
+    //auto a = task!(function void(Tag t,bool f){
       //t.ambient.deleteTag(t);
       t.close(f);
-    })(t,f);
-    _taskPool.put(a);
+    //})(t,f);
+    //_taskPool.put(a);
   }
 
   Tag _outTag = null;

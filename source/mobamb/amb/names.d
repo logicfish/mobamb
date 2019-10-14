@@ -7,7 +7,7 @@ private import std.traits,
 
 private import mobamb.amb.domain;
 
-alias Action = void delegate(TypedProcess);
+alias Action = void delegate(Process);
 
 class ProcessName : Name {
     abstract class Caps : Capability {
@@ -168,30 +168,79 @@ class ProcessName : Name {
       return null;
     }
 
-    Domain _domain;
+    Name _domain;
+
     @property
-    inout(Domain) domain() @safe nothrow pure inout {
+    inout(Name) domain() @safe nothrow pure inout {
       return _domain;
     }
     string capType() @safe nothrow pure const {
       return "name";
     }
+    this(Name d=DefaultName.defaultName) {
+      _domain = d;
+    }
 };
 
 class NameLiteral : ProcessName {
-    Variant lit;
-    this(Variant v) { lit = v; }
-    this(T)(T t) { this(Variant(t)); }
+    Variant _literal;
+    this(Variant v,Name d=DefaultName.defaultName) {
+      super(d);
+      _literal = v;
+    }
+    this(T)(T t,Name d=DefaultName.defaultName) {
+      this(Variant(t),d);
+    }
+    @property
+    auto literal() nothrow inout {
+      return _literal;
+    }
+
     override bool matches(const(Name) n) const {
+        if(n is this) return true;
+        if(!domain.matches(n.domain))return false;
         auto l = cast(NameLiteral)n;
         if(l is null) return super.matches(n);
-        return lit == l.lit;
+        return literal == l.literal ;
     }
     override string toString() const {
-      return "NameLiteral:" ~ lit.get!string;
+      return "NameLiteral:" ~ literal.get!string;
+    }
+
+    Name makeSymbolic() {
+      return new SymbolicName(literal,domain);
     }
 };
 
+class SymbolicName : ProcessName {
+  Variant _symbol;
+  this(Variant v,Name d=DefaultName.defaultName) {
+    super(d);
+    _symbol = v;
+  }
+  this(T)(T t,Name d=DefaultName.defaultName) {
+    this(Variant(t),d);
+  }
+  override bool matches(const(Name) n) const {
+      if(n is this) return true;
+      if(!domain.matches(n.domain))return false;
+      auto l = cast(NameLiteral)n;
+      if(l !is null) {
+        return symbol == l.literal;
+      }
+      return super.matches(n);
+  }
+  override string toString() const {
+    return "SymbolicName:" ~ symbol.get!string;
+  }
+  @property
+  auto symbol() nothrow inout {
+    return _symbol;
+  }
+
+};
+
+/*
 class NameBinding : ProcessName {
     Name boundName;
     override bool matches(const(Name) n) const {
@@ -228,15 +277,32 @@ final class WildcardName : ProcessName {
         }
     }
 };
-
+*/
+/**
+NilName matches nothing.
+**/
 final class NilName : ProcessName {
     override bool matches(const(Name) n) const {
       return false;
     }
     static NilName nilName;
     static this() {
-        if(nilName is null) {
-            nilName=new NilName;
-        }
+        nilName=new NilName;
+        nilName._domain = nilName;
     }
 };
+
+/**
+DefaultName matches any DefaultName.
+**/
+final class DefaultName : ProcessName {
+  override bool matches(const(Name) n) const {
+    return cast(DefaultName)n !is null;
+  }
+  static DefaultName defaultName;
+  static this() {
+      defaultName=new DefaultName;
+      defaultName._domain = defaultName;
+  }
+
+}

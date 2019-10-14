@@ -24,7 +24,7 @@ interface Name : Capability {
     Returns:
       The domain within which the name is bound.
     **/
-    @property inout(Domain) domain() @safe nothrow pure inout;
+    @property inout(Name) domain() @safe nothrow pure inout;
 }
 
 interface Channel {
@@ -61,22 +61,39 @@ interface TypeEnvironment : Domain {
 }
 
 /**
+Raw process.
+**/
+
+interface Process {
+  @property inout(Name) name() @safe nothrow pure inout;
+  @property inout(ProcessDomain) domain() @safe nothrow pure inout;
+  /**
+  An internal method called before evaluation to ensure the consistency
+  of the process tree in memory.
+  **/
+  bool cleanup();
+  /**
+  Evaluate all capabilities including children.
+  Returns:    true if a match was found. false otherwise.
+  **/
+  bool evaluateAll();
+
+  void _enter(Name n);
+  void _exit(Name n);
+  void enter_(Name n);
+  void exit_(Name n);
+  void in_(Name n);
+  void out_(Name n);
+  void _in(Name n);
+  void _out(Name n);
+
+}
+
+/**
 A process with a type domain.
  **/
-interface TypedProcess {
-    @property inout(Name) name() @safe nothrow pure inout;
-    @property inout(ProcessDomain) domain() @safe nothrow pure inout;
-    /**
-    An internal method called before evaluation to ensure the consistency
-    of the process tree in memory.
-    **/
-    bool cleanup();
-    /**
-    Evaluate all capabilities including children.
-    Returns:    true if a match was found. false otherwise.
-    **/
-    bool evaluateAll();
-    TypedProcess getLocalAmbient();
+interface TypedProcess(DomainType : ProcessDomain) : Process {
+    @property inout(DomainType) domain() @safe nothrow pure inout;
 }
 
 /**
@@ -88,6 +105,9 @@ interface ProcessDomain : Domain {
     //@property inout(TypeEnvironment) environment() @safe nothrow pure inout;
     @property inout(ProcessDomain) parent() @safe nothrow pure inout;
     @property ProcessDomain parent(ProcessDomain d) @safe nothrow pure;
+    @property inout(Process[]) children() @safe nothrow pure inout;
+    @property inout(Process) process() @safe nothrow pure inout;
+
     //bool capsMatch(Name n,Capability c);
     //void excercise(TypedProcess p,Capability c);
     //bool canExit(Name) const;
@@ -99,8 +119,19 @@ interface ProcessDomain : Domain {
     // read input from channel n using capabilty o.
     bool input(Capability o);
     bool inputAvailable(const(Name)n);
-    Channel channel(const(Name)n);
+
+    void movingOut(ProcessDomain c);
+    void movingIn(ProcessDomain c);
+
+
+    Process getLocalAmbient();
+    Process getParentAmbient();
+    Process getHostAmbient();
     inout(ProcessDomain) getTypedDomain() inout;
+
+
+    Channel channel(const(Name)n);
+
     inout(Capability) binding(const(Name)) inout;
     ProcessDomain binding(const(Name),Capability);
 
@@ -108,6 +139,7 @@ interface ProcessDomain : Domain {
     inout(Capability) resolveCaps(inout(Capability) _n) inout;
 
     static ProcessDomain _localDomain;
+
     static auto localDomain() {
       return _localDomain;
     }

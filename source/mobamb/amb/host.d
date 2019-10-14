@@ -15,7 +15,7 @@ debug {
 
 
 final class HostObject {
-  void evaluate(TypedProcess r) {
+  void evaluate(Process r) {
     debug(Host) {
         sharedLog.info("Host evaluation start.");
     }
@@ -50,6 +50,8 @@ final class HostObject {
     debug(Host) {
         sharedLog.info("Host evaluation finished.");
     }
+  }
+  void finish() {
     _tagPool.finish();
   }
   TagPool _tagPool;
@@ -64,7 +66,7 @@ final class HostObject {
 class HostAmbient : MobileAmbient {
   HostObject _hostObject;
 
-  this(MobileProcess p,ProcessName n,HostObject o = new HostObject) {
+  this(Process p,ProcessName n,HostObject o = new HostObject) {
     super(p,n);
     this._hostObject = o;
   }
@@ -103,5 +105,8 @@ class HostAmbient : MobileAmbient {
   }
   void evaluate() {
     hostObject.evaluate(this);
+  }
+  void close() {
+    hostObject.finish();
   }
 }
