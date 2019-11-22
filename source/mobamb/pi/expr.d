@@ -6,34 +6,74 @@ private import metad.interp;
 private import pegged.grammar;
 
 private import mobamb.amb;
+private import mobamb.pi.constant;
 
-struct TypeConstParser(alias CAPS,ParseTree T) {
-  mixin Compiler!(T,Parser);
-  mixin(grammar("_CapType : CapPattern <- " ~ CAPS));
+private import std.experimental.logger;
 
+struct TypeConstParser {
   // parser macros
   template process(alias P) {
-    enum process = processTypeConstant!P;
+    enum process = processTypeConstant!(P);
+  }
+  auto process(TypeConstant p) {
+    return processTypeConstant(p);
   }
   template action(alias A,alias P) {
     enum action = actionTypeConstant!(A,P);
   }
+  auto action(TypeConstant a,TypeConstant p) {
+    assert(cast(CapTypeConstant)a !is null);
+    assert(cast(ProcessTypeConstant)p !is null);
+    return actionTypeConstant(cast(CapTypeConstant)a,cast(ProcessTypeConstant)p);
+  }
+  template action(alias A) {
+    enum action = actionTypeConstant!(A);
+  }
+  auto action(TypeConstant a) {
+    assert(cast(CapTypeConstant)a !is null);
+    return actionTypeConstant(cast(CapTypeConstant)a);
+  }
   template path(alias E,alias P) {
     enum path = pathTypeConstant!(E,P);
+  }
+  auto path(TypeConstant e,TypeConstant p) {
+    assert(cast(ProcessTypeConstant)p !is null);
+    return pathTypeConstant(e,cast(ProcessTypeConstant)p);
   }
   template name(alias D,alias N) {
     enum name = nameTypeConstant!(D,N);
   }
-  template name(alias N) {
+  auto name(const(string) d,TypeConstant n) {
+    return new NameTypeConstant(d,n);
+  }
+  template name(alias TypeConstant N) {
     enum name = nameTypeConstant!(N);
   }
-  template domain(alias D) {
+  auto name(TypeConstant n) {
+    return new NameTypeConstant(n);
+  }
+  template name(alias TypeConstant D,alias TypeConstant N) {
+    enum name = nameTypeConstant!(N);
+  }
+  auto name(TypeConstant d,TypeConstant n) {
+    return new NameTypeConstant(d,n);
+  }
+  template domain(const(string) D) {
     enum domain = domainTypeConstant!(D);
   }
-  template cap(const(string) C,alias P) {
+  auto domain(const(string) d) {
+    return stringRefTypeConstant(d);
+  }
+  /* template domain(TypeConstant D) {
+    enum domain = stringRefTypeConstant!(D);
+  }
+  auto domain(TypeConstant d) {
+    return stringRefTypeConstant(d);
+  }*/
+  template cap(const(string) C,alias TypeConstant P) {
     enum cap = capTypeConstant!(C,P);
   }
-  template composition(alias C,alias P) {
+  template composition(alias TypeConstant C,alias TypeConstant P) {
     enum composition = compositionTypeConstant!(C,P);
   }
   template ambient(alias N,P...) {
@@ -41,53 +81,80 @@ struct TypeConstParser(alias CAPS,ParseTree T) {
   }
 }
 
-struct typeConstantInterpreter(alias CAPS,ParseTree T) {
-  TypeConstParser!(CAPS,T) parser;
+class TypeConstantInterpreter(alias CAPS) {
+  static TypeConstant delegate(ParseTree)[string] nodes;
+  static const(string) delegate(ParseTree)[string] strNodes;
+  TypeConstParser parser;
   alias parser this;
-
-  TypeConstant delegate(ParseTree)[string] nodes;
 
   this() {
     //nodes["GRAMMAR.Var"] = f=>idParser(f.children[1].matches);
-    nodes["ProcessGrammar"] = f=>process!(typeConstantInterpreter(f.children[0]));
-    nodes["ProcessGrammar.CapAction"] = (f)=>{
-      if(f.children.length == 1) {
-        return action!(typeConstantInterpreter(f.children[0]),voidTypeConstant);
-      } else {
-        return action!(typeConstantInterpreter(f.children[0]),typeConstantInterpreter(f.children[1]));
-      }
-    };
-    nodes["ProcessGrammar.CapPath"] = f=>path!(typeConstantInterpreter(f.children[0]),typeConstantInterpreter(f.children[1]));
-    nodes["ProcessGrammar.Name"] = (f)=> {
-      if(p.children.length==0) return name!(f.matches[0]);
-      else {
-        return name!(f.matches[0],f.matches[1]);
-      }
-    };
-    nodes["ProcessGrammar.Domain"] = (f)=>domain!(typeConstantInterpreter(f.children[0]));
+    nodes["ProcessGrammar"] = f=>parser.process(interpret!TypeConstant(f.children[0]));
+
+    nodes["ProcessGrammar.CapAction"] = f=>
+      (f.children.length == 1) ? parser.action(interpret!TypeConstant(f.children[0]))
+      : parser.action(interpret!TypeConstant(f.children[0]),interpret!TypeConstant(f.children[1]));
+
+    nodes["ProcessGrammar.CapPath"] = f=>parser.path(interpret!TypeConstant(f.children[0]),interpret!TypeConstant(f.children[1]));
+
+    nodes["ProcessGrammar.Name"] = f=>
+      (f.children.length == 1) ? parser.name(interpret!TypeConstant(f.children[0]))
+      : parser.name(interpret!TypeConstant(f.children[0]),interpret!TypeConstant(f.children[1]));
+
+    //nodes["ProcessGrammar.Domain"] = (f)=>parser.domain(interpret!TypeConstant(f.children[0]));
   }
-  enum interpret = Interpreter(nodes,T);
+  static auto interpret(alias T)(ParseTree data)
+    if (is(T == TypeConstant)) {
+    return Interpreter!(T,typeof(nodes))(nodes,data).front;
+  }
+  static auto interpret(alias T)(ParseTree data)
+    if (is(T == const(string))) {
+    return Interpreter!(T,typeof(strNodes))(strNodes,data).front;
+  }
 }
 
-unittest {
+/* unittest {
   // Test the Interpreter
 
-  //enum TEST_ {}
-}
+  sharedLog.info("AMB Expression interpreter tests");
+  enum EXPR = "A[]";
+  enum CAPS = "('in' / 'out')";
 
-struct TypeConstantCompiler(alias CAPS,ParseTree T,
-        alias Parser=TypeConstantCompiler) {
-      TypeConstParser!(CAPS,T) parser;
+  enum ProcessGrammarFilename = "process.peg";
+  mixin(grammar(import (ProcessGrammarFilename)));
+  mixin(grammar("_CapType : CapPattern <- " ~ CAPS));
+
+  enum parser = ProcessGrammar!(_CapType)(EXPR);
+  auto i = TypeConstantInterpreter!(_CapType);
+  auto interp = i.interpret!(TypeConstant)(parser);
+
+  //enum expr = parser.compile!
+  //auto compiler = TypeConstantCompiler(CAPS,ParseTree T);
+  //enum comp = TypeConstantInterpreter(_CapType,parser).compileNode;
+
+  assert(is(typeof(interp) == ProcessTypeConstant));
+  assert(is(typeof(interp) == AmbientTypeConstant));
+  assert(interp._name == "A");
+
+}
+ */
+//struct TypeConstantCompiler(ParseTree T,
+//        alias Parser=TypeConstantCompiler!T) {
+struct TypeConstantCompiler(ParseTree T) {
+
+      TypeConstParser parser;
       alias parser this;
 
+      mixin Compiler!(T,TypeConstantCompiler!T);
+
       mixin (compilerOverride!("ProcessGrammar",
-          "process!(compileNode(T.children[0]))"
+          "parser.process!(TypeConstantCompiler!(T.children[0]).compile())"
       ));
-      mixin (nodeOverride!("(T.name == \"ProcessGrammar.CapAction\") && (T.children.length == 1)",
-        "action!(compileNode(T.children[0]))"
+      /*mixin (nodeOverride!("(T.name == \"ProcessGrammar.CapAction\") && (T.children.length == 1)",
+        "TypeConstParser.action!(Parser!(T.children[0]).compileNode())"
       ));
       mixin (nodeOverride!("(T.name == \"ProcessGrammar.CapAction\") && (T.children.length == 2)",
-        "action!(compileNode(T.children[0]),compileNode(T.children[1]))"
+        "TypeConstParser.action!(Parser!(T.children[0]).compileNode,Parser!(T.children[1]).compileNode)"
       ));
       mixin (compilerOverride!("ProcessGrammar.CapPath",
         "path!(compileNode(T.children[0]),comppileNode(T.children[1]))"
@@ -106,7 +173,7 @@ struct TypeConstantCompiler(alias CAPS,ParseTree T,
       ));
       mixin (compilerOverride!("ProcessGrammar.Composition",
           "composition!(compileNode(T.children[0]),compileNode(T.children[1]))"
-      ));
+      ));*/
       /* mixin (nodeOverride!("(T.name == \"ProcessGrammar.Ambient\") && (T.children.length == 1)",
         "ambient!(compileNode(T.children[0]))"
       )); */
@@ -192,4 +259,26 @@ class TypeConstantCompiler(alias CT) : IParser!TypeConstant {
         }
         return result;
     }
+*/
+/*
+unittest {
+  sharedLog.info("Expression compiler tests");
+  enum EXPR = "A[]";
+  enum CAPS = "('in' / 'out')";
+
+  enum ProcessGrammarFilename = "process.peg";
+  mixin(grammar(import (ProcessGrammarFilename)));
+  mixin(grammar("_CapType : CapPattern <- " ~ CAPS));
+
+  enum parser = ProcessGrammar!(_CapType)(EXPR);
+  //enum expr = parser.compile!
+  //auto compiler = TypeConstantCompiler(CAPS,ParseTree T);
+  enum comp = TypeConstantCompiler!(parser).compileNode;
+  enum compiled = mixin(comp);
+  //enum compiled = TypeConstantCompiler!(parser).compile;
+
+  assert(is(typeof(compiled) == ProcessTypeConstant));
+  assert(is(typeof(compiled) == AmbientTypeConstant));
+  assert(compiled._name == "A");
+}
 */

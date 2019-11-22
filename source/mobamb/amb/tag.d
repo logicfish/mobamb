@@ -21,7 +21,6 @@ host process.  The caller invokes evaluation methods on the host to
 incurr tag processing. Operations which modify the process heirarchy
 (with respect to ambient boundaries) are synchronised by being
 delegated to a single mobility thread.
-
 **/
 interface Tag {
   alias Apply = bool delegate(Tag);
@@ -49,11 +48,6 @@ class TagPool {
         return _target;
       }
     }
-    /* bool __exec(Tag t) {
-      return false;
-    }
-    void __close(Tag t,bool b) {
-    } */
   }
   /**
   AsyncTags are processed in the caller thread.
@@ -85,8 +79,6 @@ class TagPool {
   SyncTags are processed in single thread attached to the enclosing
   TagPool.
   **/
-  //class SyncTag (_exec : Tag.Apply, _close : Tag.Close)
-  //    : AsyncTag!(_exec,_close) {
   class SyncTag (alias _exec, alias _close)
       : AsyncTag!(_exec,_close) {
     override void evaluate() {
@@ -97,14 +89,12 @@ class TagPool {
         }
     }
   }
-  //final class _EnterTag : SyncTag!(delegate bool(Tag x) {
   final class _EnterTag : SyncTag!(function bool(Tag x) {
     // _exec function for _enter.
     debug(Tagging) {
         sharedLog.info("_EnterTag ", x.ambient.name.to!string, " >> ",x.target.name);
         sharedLog.info("_EnterTag --> ", x.lemma);
     }
-    //x.ambient.moveIn(cast(ProcessName.Caps)x.lemma,x.target);
     x.target.domain.movingIn(x.ambient.domain);
     x.ambient.caps=x.ambient.caps.remove!(f => f == x.lemma);
     (cast(ProcessName.Caps)x.lemma).action()(x.ambient);
@@ -123,10 +113,8 @@ class TagPool {
     // _exec function for _leave.
     debug(Tagging) {
         sharedLog.info("_LeaveTag " ~ x.ambient.name.to!string);
-        //sharedLog.info("_LeaveTag --> "~ x.target.name.to!string);
         sharedLog.info("_LeaveTag --> ",x.lemma);
     }
-    //x.ambient.moveOut(cast(ProcessName.Caps)x.lemma,x.target);
     x.ambient.parent.domain.movingOut(x.ambient.domain);
     return true;
   },(x,f) {
@@ -141,9 +129,9 @@ class TagPool {
   }) {
   }
 
-  abstract class SyncIOTag(alias _exec,alias _close) : SyncTag!(_exec,_close)
-  {
+  abstract class SyncIOTag(alias _exec,alias _close) : SyncTag!(_exec,_close) {
   }
+
   final class _InputTag() : SyncIOTag!((t) {
     // _exec function for _input.
     debug(Tagging) {
@@ -153,11 +141,14 @@ class TagPool {
     return t.ambient.domain.input(t.lemma);
   },(t,f) {
     if(f) {
-      /*auto _task = task!((Tag _t) {
+      /* auto _task = task!((Tag _t) {
+        debug(Tagging) {
+            sharedLog.info("~_InputTag "~ _t.ambient.name.to!string);
+        }
         _t.ambient.caps = _t.ambient.caps.remove!(x => x == _t.lemma);
       })(t);
       auto ha = cast(HostAmbient)t.ambient.domain.getHostAmbient;
-      ha.put!(typeof(_task))(_task);*/
+      ha.put!(typeof(_task))(_task); */
       t.ambient.caps = t.ambient.caps.remove!(x => x == t.lemma);
     }
   }) {
@@ -322,15 +313,6 @@ class TagPool {
     debug(Tagging) {
       sharedLog.info("TagPool.__eval");
     }
-    /*if(!runningTask) {
-      debug(Tagging) {
-        sharedLog.info("evaluate not running in taskpool.");
-      }
-      auto t = task!evaluateTask(this);
-      _taskPool.put(t);
-      while(!t.done){}
-      return t.yieldForce;
-    }*/
 
     if(__evalPI(p)) return true;
 
@@ -350,9 +332,6 @@ class TagPool {
           sharedLog.info("in "~a.to!string);
         }
         tag.evaluate();
-        //synchronized(p) {
-          //p._inTags = p._inTags.remove!(x=>x == tag);
-        //}
     }
     synchronized(p) {
         Tag[MobileAmbient] x;
@@ -388,10 +367,6 @@ class TagPool {
       }
     } while(!_otherTags.empty);
 
-    /*synchronized(p) {
-      p._otherTags = [];
-      _otherTags = [];
-    }*/
     return true;
   }
   // generic tag
@@ -544,4 +519,9 @@ class TagTask(T : TagTask!T) {
   auto run() {
     return new T(pool);
   }
+}
+
+unittest {
+
+
 }

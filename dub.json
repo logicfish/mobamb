@@ -6,9 +6,10 @@
 	"description": "Mobile Ambients and Flow Logic",
 	"license": "GNU Lesser Public License 3.0",
 	"name": "mobamb",
+	"stringimportPaths" : [ "resources" ],
 	"dependencies" : {
-		"metad" : "*"
+		"metad" : "~>0.1.1"
 	},
-	"debugs" : [ "Tagging","Types","Ambient","Host","Process" ],
-	"stringImportPaths" : [ "resources" ]
+	"debugVersions" : [ "Tagging","Types","Ambient","Host","Process" ],
+	"stringImportPaths" : [ "resources" ],
 }

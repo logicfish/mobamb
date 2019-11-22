@@ -18,7 +18,6 @@ private import mobamb.amb.host;
 
 class MobileAmbient : MobileProcess!Location {
     ProcessName.Caps[] caps;
-    //ProcessName.Caps[] coCaps;
 
     this(Process p, ProcessName n) {
       this._domain = new Location(this);
@@ -40,7 +39,6 @@ class MobileAmbient : MobileProcess!Location {
           sharedLog.info("evaluatePIOutputs:",_outputs.empty);
       }
       if(_outputs.empty) return false;
-      //auto parent = getParentAmbient;
 
       auto _inputs = caps.filter!(x=>cast(ProcessName.Input)x !is null);
       debug(Ambient) {
@@ -140,7 +138,6 @@ class MobileAmbient : MobileProcess!Location {
       }
 
       bool res = evaluatePI();
-      //bool res = false;
 
       debug(Ambient) {
           sharedLog.info("evaluateAll done pi:",res);
@@ -150,7 +147,6 @@ class MobileAmbient : MobileProcess!Location {
 
       auto p = getParentAmbient;
 
-      //if(pa !is null) {
       if(p !is null) {
         auto pa = p.getParentAmbient;
         if(pa !is null) {
@@ -401,6 +397,12 @@ class MobileAmbient : MobileProcess!Location {
 
 };
 
+template mobileAmbient() {
+  auto mobileAmbient(Process p, ProcessName n) {
+    return new MobileAmbient(p,n);
+  }
+}
+
 private static __gshared MobileAmbient _masterAmbient;
 private static bool masterAmbInstantiated = false;
 
@@ -591,25 +593,19 @@ unittest {
     auto n = new NameLiteral("n");
     auto m = new NameLiteral("m");
 
-    //auto _a = new NameLiteral("a");
-
     auto x = new HostAmbient(getMasterAmbient,X);
     scope(exit)x.close;
 
     auto a = new MobileAmbient(x,A);
 
     auto output_m = DefaultName.defaultName.new Output(m);
-    //auto out_a = A.new Out(output_n);
-    //a.caps ~= out_a;
     x.caps ~= output_m;
 
     auto r_n = new RestrictionProcess(x,n);
     auto n_a = new BindingProcess(r_n,m,A);
 
     auto b = new MobileAmbient(n_a,B);
-    //auto input_n = DefaultName.defaultName.new Input(n,makeAction(r_n));
     auto input_n = DefaultName.defaultName.new Input(n);
-    //auto p_input_m = new CapProcess(x,input_m);
     x.caps ~= input_n;
 
     auto in_n = n.new In;

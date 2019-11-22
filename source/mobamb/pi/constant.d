@@ -10,10 +10,14 @@ class ProcessTypeConstant : TypeConstant {
         this._process = p;
     }
 }
-template processTypeConstant(alias P : TypeConstant) {
+template processTypeConstant(alias TypeConstant P) {
     auto processTypeConstant() {
         return new ProcessTypeConstant(P);
     }
+}
+
+auto processTypeConstant(ref TypeConstant P) {
+  return new ProcessTypeConstant(P);
 }
 
 class VoidTypeConstant : ProcessTypeConstant {
@@ -32,7 +36,8 @@ class SymRefTypeConstant(alias SYM) : ProcessTypeConstant {
     this(SYM r) {
         _symRef = r;
     }
-    ref SYM symRef() {
+    @property
+    auto ref symRef() pure nothrow @safe {
         return _symRef;
     }
 }
@@ -43,6 +48,25 @@ template symRefTypeConstant(alias SYM) {
     }
 }
 
+class StringRefTypeConstant : SymRefTypeConstant!string {
+  this(string r) {
+    super(r);
+  }
+}
+
+template stringRefTypeConstant(string s) {
+    auto stringRefTypeConstant() {
+        return new StringRefTypeConstant(s);
+    }
+}
+auto stringRefTypeConstant(string s) {
+    return new StringRefTypeConstant(s);
+}
+
+/* auto stringRefTypeConstant(string s) {
+    return new StringRefTypeConstant(s);
+} */
+
 class ActionTypeConstant : ProcessTypeConstant {
     CapTypeConstant _cap;
     this(CapTypeConstant c,ProcessTypeConstant p) {
@@ -51,10 +75,21 @@ class ActionTypeConstant : ProcessTypeConstant {
     }
 }
 
-template actionTypeConstant(alias A : TypeConstant,alias P  : TypeConstant) {
+template actionTypeConstant(alias CapTypeConstant A,alias ProcessTypeConstant P) {
     auto actionTypeConstant() {
         return new ActionTypeConstant(A,P);
     }
+}
+auto actionTypeConstant(CapTypeConstant a,ProcessTypeConstant p) {
+  return actionTypeConstant!(a,p);
+}
+template actionTypeConstant(alias CapTypeConstant A) {
+    auto actionTypeConstant() {
+        return new ActionTypeConstant(A,voidTypeConstant);
+    }
+}
+auto actionTypeConstant(CapTypeConstant a) {
+  return actionTypeConstant(a,voidTypeConstant);
 }
 
 class PathTypeConstant : ProcessTypeConstant {
@@ -64,10 +99,13 @@ class PathTypeConstant : ProcessTypeConstant {
         super(p);
     }
 }
-template pathTypeConstant(alias E : TypeConstant ,alias P : TypeConstant) {
+template pathTypeConstant(alias TypeConstant E,alias ProcessTypeConstant P) {
     auto pathTypeConstant() {
         return new PathTypeConstant(E,P);
     }
+}
+auto pathTypeConstant(TypeConstant e,ProcessTypeConstant p) {
+  return new PathTypeConstant(e,p);
 }
 
 class CapTypeConstant : TypeConstant {
@@ -81,35 +119,51 @@ class _CapTypeConstant(const(string) C) : CapTypeConstant {
         super(C);
     }
 }
-template capTypeConstant(C : const(string)) {
-    auto capTypeConstant(alias P : TypeConstant)() {
-        return new _CapTypeConstant!C(P);
+
+template capTypeConstant(const(string) C,) {
+    auto capTypeConstant()() {
+        return new _CapTypeConstant!C();
     }
 }
-template capTypeConstant(alias C,alias P : TypeConstant) {
-    auto capTypeConstant() {
-        return new CapTypeConstant(C,P);
-    }
+auto capTypeConstant(const(string) c) {
+    return new CapTypeConstant(c);
 }
 class NameTypeConstant : _CapTypeConstant!"name" {
-    SymRefTypeConstant!string _domain;
+    TypeConstant _domain;
     TypeConstant _name;
-    this(const(string) d,TypeConstant n) {
+    this(T)(T d,TypeConstant n) {
         super();
-        this._domain = symRefTypeConstant!string(d);
+        this._domain = symRefTypeConstant!T(d);
+        this._name = n;
+    }
+    this(TypeConstant d,TypeConstant n) {
+        super();
+        this._domain = d;
+        this._name = n;
+    }
+    this(TypeConstant n) {
+        super();
+        this._domain = alphaDomain;
         this._name = n;
     }
 }
-template nameTypeConstant(alias D : const(string),alias N : TypeConstant) {
+template nameTypeConstant(const(string) D,alias TypeConstant N) {
     auto nameTypeConstant() {
         return new NameTypeConstant(D,N);
     }
 }
 
-template nameTypeConstant(alias N : TypeConstant) {
+auto nameTypeConstant(const(string) d,TypeConstant n) {
+    return new NameTypeConstant(d,n);
+}
+
+template nameTypeConstant(alias TypeConstant N) {
     auto nameTypeConstant() {
-        return new NameTypeConstant(alphaDomain,N);
+        return new NameTypeConstant(N);
     }
+}
+auto nameTypeConstant(TypeConstant n) {
+    return new NameTypeConstant(n);
 }
 
 class CompositionTypeConstant : TypeConstant {
@@ -120,32 +174,42 @@ class CompositionTypeConstant : TypeConstant {
         this._process = p;
     }
 }
-template compositionTypeConstant(alias C : TypeConstant,alias P : TypeConstant) {
+template compositionTypeConstant(alias TypeConstant C,alias TypeConstant P) {
     auto compositionTypeConstant() {
         return new CompositionTypeConstant(C,P);
     }
 }
+auto compositionTypeConstant(TypeConstant c,TypeConstant p) {
+    return new CompositionTypeConstant(c,p);
+}
 
 class AmbientTypeConstant : TypeConstant {
     NameTypeConstant _name;
-    TypeConstant _process;
-    this(NameTypeConstant n,TypeConstant p) {
+    TypeConstant[] _process;
+    this(NameTypeConstant n,TypeConstant[] p) {
         this._name = n;
         this._process = p;
     }
 }
-template ambientTypeConstant(alias P : TypeConstant) {
+template ambientTypeConstant(alias NameTypeConstant N,alias TypeConstant[] P) {
     auto ambientTypeConstant() {
-        return new AmbientTypeConstantExpression(P);
+        return new AmbientTypeConstant(N,P);
     }
+}
+auto ambientTypeConstant(NameTypeConstant n,TypeConstant[] p) {
+    return new AmbientTypeConstant(n,p);
 }
 
 class HostAmbientTypeConstant : AmbientTypeConstant {
-    this(NameTypeConstant n,TypeConstant p) {
+    this(NameTypeConstant n,TypeConstant[] p) {
         super(n,p);
     }
 }
 
 // domains
 
-const alphaDomain = symRefTypeConstant!string("α");
+template alphaDomain() {
+  auto alphaDomain() {
+    return symRefTypeConstant!string("α");
+  }
+}

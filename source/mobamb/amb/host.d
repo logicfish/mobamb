@@ -13,40 +13,37 @@ debug {
     import std.experimental.logger;
 }
 
-
 final class HostObject {
   void evaluate(Process r) {
     debug(Host) {
         sharedLog.info("Host evaluation start.");
     }
     auto __d = ProcessDomain.localDomain(r.domain);
+
     scope(exit) {
       debug(Host) {
           sharedLog.info("restore domain ",__d);
       }
       ProcessDomain.localDomain(__d);
     }
-    while(r.cleanup is false) {}
-    //bool f = tagPool.evaluate;
-    //waitForPool;
-    //if(!f) f = r.evaluateAll;
+
+    while(r.cleanup is false) {
+    }
     bool f = r.evaluateAll;
-    //tagPool.waitForPool;
 
     do {
       debug(Host) {
         sharedLog.info("Host evaluation loop.");
       }
       while(r.cleanup is false) {}
-      //if(!f) f = r.evaluateAll;
       f = tagPool.evaluate;
       if(!f) {
         r.evaluateAll;
         while(r.cleanup is false) {}
         f = tagPool.evaluate;
       }
-      //tagPool.waitForPool;
     } while(f);
+
     debug(Host) {
         sharedLog.info("Host evaluation finished.");
     }
@@ -75,9 +72,6 @@ class HostAmbient : MobileAmbient {
   ) {
     return tagPool.createTag!(T,Args)(cap,amb,t,args);
   }
-  //bool createTag(T)(Capability cap,MobileAmbient amb) {
-  //  return tagPool.createTag!T(cap,amb);
-  //}
   bool createTag(string T)(Capability cap,MobileAmbient amb,MobileAmbient t) {
     static if (T is "out") {
         return createTag!(TagPool.OutTag!())(cap,amb,t);
@@ -109,4 +103,44 @@ class HostAmbient : MobileAmbient {
   void close() {
     hostObject.finish();
   }
+}
+
+template hostAmbient() {
+  auto hostAmbient(ProcessName n) {
+    return new HostAmbient(null,n);
+  }
+  auto hostAmbient(Process p,ProcessName n) {
+    return new HostAmbient(p,n);
+  }
+}
+
+unittest {
+  auto M = nameLiteral("M");
+  auto m = hostAmbient(M);
+  scope(exit) m.close;
+
+  auto X = nameLiteral("X");
+  auto Y = nameLiteral("Y");
+  auto x = hostAmbient(m,X);
+  auto y = hostAmbient(m,Y);
+  scope(exit) x.close;
+  scope(exit) y.close;
+
+  auto A = nameLiteral("A");
+  auto B = nameLiteral("B");
+  auto a = mobileAmbient(x,A);
+  auto b = mobileAmbient(y,B);
+
+  auto in_x = X.new In;
+  auto out_y = Y.new Out;
+  b.caps ~= out_y;
+  b.caps ~= in_x;
+
+  y.evaluate;
+  m.evaluate;
+  x.evaluate;
+  y.evaluate;
+  m.evaluate;
+  x.evaluate;
+  assert(b.parent != x);
 }

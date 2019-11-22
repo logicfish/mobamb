@@ -16,7 +16,8 @@ class ProcessName : Name {
           if(_action !is null) {
             return _action;
           }
-          else return (p){};
+          else return (p){
+          };
         }
         this(Action p) {
             if(p !is null) {
@@ -212,6 +213,10 @@ class NameLiteral : ProcessName {
     }
 };
 
+auto nameLiteral(T)(T t) {
+  return new NameLiteral(t);
+};
+
 class SymbolicName : ProcessName {
   Variant _symbol;
   this(Variant v,Name d=DefaultName.defaultName) {
@@ -239,6 +244,12 @@ class SymbolicName : ProcessName {
   }
 
 };
+
+template symbolicName(T) {
+  auto symbolicName(T t,Name d=DefaultName.defaultName) {
+    return new SymbolicName(t,d);
+  }
+}
 
 /*
 class NameBinding : ProcessName {
@@ -304,5 +315,4 @@ final class DefaultName : ProcessName {
       defaultName=new DefaultName;
       defaultName._domain = defaultName;
   }
-
 }
