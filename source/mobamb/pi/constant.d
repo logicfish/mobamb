@@ -1,7 +1,19 @@
-
 module mobamb.pi.constant;
 
+private import pegged.grammar;
+
 class TypeConstant {
+	ParseTree _parseTree;
+	public {
+		@property
+		ParseTree parseTree() {
+			return _parseTree;
+		}
+		@property
+		void parseTree(ParseTree t) {
+			_parseTree = t;
+		}
+	}
 }
 
 class ProcessTypeConstant : TypeConstant {
@@ -26,6 +38,15 @@ class VoidTypeConstant : ProcessTypeConstant {
 template voidTypeConstant() {
     auto voidTypeConstant() {
         return new VoidTypeConstant();
+    }
+}
+
+class ErrorTypeConstant : ProcessTypeConstant {
+}
+
+template errorTypeConstant() {
+    auto errorTypeConstant() {
+        return new ErrorTypeConstant();
     }
 }
 
@@ -80,6 +101,11 @@ template actionTypeConstant(alias CapTypeConstant A,alias ProcessTypeConstant P)
         return new ActionTypeConstant(A,P);
     }
 }
+template actionTypeConstant(string A) {
+    auto actionTypeConstant() {
+        return new ActionTypeConstant(A,P);
+    }
+}
 auto actionTypeConstant(CapTypeConstant a,ProcessTypeConstant p) {
   return actionTypeConstant!(a,p);
 }
@@ -110,41 +136,60 @@ auto pathTypeConstant(TypeConstant e,ProcessTypeConstant p) {
 
 class CapTypeConstant : TypeConstant {
     const(string) _cap;
-    this(const(string) c) {
+    NameTypeConstant _name;
+	TypeConstant _process;
+    this(const(string) c,NameTypeConstant n,TypeConstant p=voidTypeConstant) {
         this._cap = c;
+		this._name = n;
+		this._process = p;
     }
 }
 class _CapTypeConstant(const(string) C) : CapTypeConstant {
-    this() {
-        super(C);
+    this(NameTypeConstant n,TypeConstant p=voidTypeConstant) {
+        super(C,n,p);
     }
 }
 
-template capTypeConstant(const(string) C,) {
-    auto capTypeConstant()() {
-        return new _CapTypeConstant!C();
+template capTypeConstant(const(string) C) {
+    auto capTypeConstant(NameTypeConstant n,TypeConstant p=voidTypeConstant) {
+        return new _CapTypeConstant!C(n,p);
     }
 }
-auto capTypeConstant(const(string) c) {
-    return new CapTypeConstant(c);
+auto capTypeConstant(const(string) c,NameTypeConstant n,TypeConstant p=voidTypeConstant) {
+    return new CapTypeConstant(c,n,p);
 }
-class NameTypeConstant : _CapTypeConstant!"name" {
+class NameTypeConstant : TypeConstant {
     TypeConstant _domain;
     TypeConstant _name;
     this(T)(T d,TypeConstant n) {
-        super();
         this._domain = symRefTypeConstant!T(d);
         this._name = n;
     }
+    this(T)(T n) {
+        this._domain = alphaDomain;
+        this._name = symRefTypeConstant!T(n);
+    }
+    this(T)(T d,T n) {
+        this._domain = symRefTypeConstant!T(d);
+        this._name = symRefTypeConstant!T(n);
+    }
     this(TypeConstant d,TypeConstant n) {
-        super();
         this._domain = d;
         this._name = n;
     }
     this(TypeConstant n) {
-        super();
         this._domain = alphaDomain;
         this._name = n;
+    }
+}
+template nameTypeConstant(const(string) N) {
+    auto nameTypeConstant() {
+        return new NameTypeConstant(N);
+    }
+}
+template nameTypeConstant(const(string)D,const(string) N) {
+    auto nameTypeConstant() {
+        return new NameTypeConstant(D,N);
     }
 }
 template nameTypeConstant(const(string) D,alias TypeConstant N) {
@@ -155,6 +200,12 @@ template nameTypeConstant(const(string) D,alias TypeConstant N) {
 
 auto nameTypeConstant(const(string) d,TypeConstant n) {
     return new NameTypeConstant(d,n);
+}
+auto nameTypeConstant(const(string) d,const(string) n) {
+	return new NameTypeConstant(d,n);
+}
+auto nameTypeConstant(const(string) n) {
+	return new NameTypeConstant(n);
 }
 
 template nameTypeConstant(alias TypeConstant N) {
@@ -186,17 +237,17 @@ auto compositionTypeConstant(TypeConstant c,TypeConstant p) {
 class AmbientTypeConstant : TypeConstant {
     NameTypeConstant _name;
     TypeConstant[] _process;
-    this(NameTypeConstant n,TypeConstant[] p) {
+    this(NameTypeConstant n,TypeConstant[] p=[]) {
         this._name = n;
         this._process = p;
     }
 }
-template ambientTypeConstant(alias NameTypeConstant N,alias TypeConstant[] P) {
+template ambientTypeConstant(alias NameTypeConstant N,alias TypeConstant[] P=[]) {
     auto ambientTypeConstant() {
         return new AmbientTypeConstant(N,P);
     }
 }
-auto ambientTypeConstant(NameTypeConstant n,TypeConstant[] p) {
+auto ambientTypeConstant(NameTypeConstant n,TypeConstant[] p = []) {
     return new AmbientTypeConstant(n,p);
 }
 

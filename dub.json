@@ -8,8 +8,14 @@
 	"name": "mobamb",
 	"stringimportPaths" : [ "resources" ],
 	"dependencies" : {
-		"metad" : "~>0.1.1"
+		"metad" : "~>0.2.2"
 	},
-	"debugVersions" : [ "Tagging","Types","Ambient","Host","Process" ],
-	"stringImportPaths" : [ "resources" ],
+	"debugVersions" : [ "Tagging","Types","Ambient","Host","Process","Expressions" ],
+    "stringImportPaths": [ "resources" ],
+    "configurations": [
+        {
+            "name": "library",
+            "targetType": "library"
+        }
+    ]
 }

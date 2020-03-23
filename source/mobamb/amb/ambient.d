@@ -760,7 +760,6 @@ unittest {
 
 /*
 unittest {
-
     auto x = new MobileAmbient;
     auto a = new MobileAmbient(x);
     auto b = new MobileAmbient(x);
@@ -774,7 +773,6 @@ unittest {
     assert(a.parent is null);
 }
 */
-
 // IO Tests
 
 unittest {
@@ -871,6 +869,7 @@ unittest {
     //assert(a.domain.binding(m) == n);
     assert(a.parent == b);
 }
+
 unittest {
     sharedLog.info("X:=A[C[<B>.out A|(m).in m]]|B[]");
     auto X = new NameLiteral("X");

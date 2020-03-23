@@ -1,7 +1,7 @@
 {
 	"fileVersion": 1,
 	"versions": {
-		"metad": "0.1.1+commit.1.g6d74906",
+		"metad": "0.2.2+commit.1.g91e7358",
 		"pegged": "0.4.4"
 	}
 }

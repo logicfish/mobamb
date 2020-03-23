@@ -115,6 +115,7 @@ template hostAmbient() {
 }
 
 unittest {
+	sharedLog.info("M:=Xh[A[]]|Yh[B[out Y|in X]]");
   auto M = nameLiteral("M");
   auto m = hostAmbient(M);
   scope(exit) m.close;
@@ -136,11 +137,30 @@ unittest {
   b.caps ~= out_y;
   b.caps ~= in_x;
 
-  y.evaluate;
   m.evaluate;
-  x.evaluate;
   y.evaluate;
-  m.evaluate;
   x.evaluate;
-  assert(b.parent != x);
+
+  m.evaluate;
+  y.evaluate;
+  x.evaluate;
+
+  m.evaluate;
+  y.evaluate;
+  x.evaluate;
+
+  m.evaluate;
+  y.evaluate;
+  x.evaluate;
+
+  m.evaluate;
+  y.evaluate;
+  x.evaluate;
+
+  m.evaluate;
+  y.evaluate;
+  x.evaluate;
+
+  assert(b.parent != y);
 }
+

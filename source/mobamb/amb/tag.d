@@ -56,6 +56,9 @@ class TagPool {
   class AsyncTag(alias _exec,alias _close) : _Tag {
 
     static void _execute(_Tag t) {
+		debug(Tagging) {
+			sharedLog.info("execute ",t);
+		}
         auto __d = ProcessDomain.localDomain(t.ambient.domain);
         scope(exit) {
           ProcessDomain.localDomain(__d);
@@ -179,11 +182,30 @@ class TagPool {
     //if(t is null) return false;
     /* x.ambient.getHostAmbient.createTag!(_LeaveTag)(x.lemma,x.ambient,x.ambient.parent);
     x.target.getHostAmbient.createTag!(_EnterTag)(x.lemma,x.ambient,x.target); */
+	debug(Tagging) {
+		sharedLog.info("InTag exec ",x);
+	}
+	if(x.ambient.getHostAmbient is null) {
+		sharedLog.warning("Ambient host is null for ambient <",x.ambient.name,"> target <",x.target.name,">");
+		return false;
+	}
+	if(x.target.getHostAmbient is null) {
+		sharedLog.warning("Ambient host is null for target <",x.target.name,"> for <",x.ambient.name,">");
+		return false;
+	}
     return true;
   },(Tag x,bool f) {
+	debug(Tagging) {
+		sharedLog.info("InTag close ",x," ",f);
+	}
     if(f) {
-      x.ambient.getHostAmbient.createTag!(_LeaveTag)(x.lemma,x.ambient,x.ambient.parent);
-      x.target.getHostAmbient.createTag!(_EnterTag)(x.lemma,x.ambient,x.target);
+		import std.exception;
+		auto amb = x.ambient.getHostAmbient;
+		enforce(amb !is null);
+		enforce(amb.createTag!(_LeaveTag)(x.lemma,x.ambient,x.ambient.parent) is true);
+		auto targetAmb = x.target.getHostAmbient;
+		enforce(targetAmb !is null);
+		enforce(targetAmb.createTag!(_EnterTag)(x.lemma,x.ambient,x.target) is true);
     }
   }) {
   }
@@ -203,6 +225,14 @@ class TagPool {
     if(t is null) return false; */
     /* x.ambient.getHostAmbient.createTag!(_LeaveTag)(x.lemma,x.ambient,x.ambient.parent);
     t.getHostAmbient.createTag!(_EnterTag)(x.lemma,x.ambient,x.target); */
+	if(x.ambient.getHostAmbient is null) {
+		sharedLog.warning("Ambient host is null for ambient <",x.ambient.name,"> target <",x.target.name,">");
+		return false;
+	}
+	if(x.target.getHostAmbient is null) {
+		sharedLog.warning("Ambient host is null for target <",x.target.name,"> for <",x.ambient.name,">");
+		return false;
+	}
     return true;
   },(Tag x,bool f) {
     if(f) {
@@ -270,14 +300,13 @@ class TagPool {
   bool evaluate() {
     return __eval(this);
   }
-  static bool __evalPI(TagPool p) {
+  static bool __evalPIOutput(TagPool p) {
     debug(Tagging) {
-      sharedLog.info("TagPool.__evalPI");
+      sharedLog.info("TagPool.__evalPIOutput");
     }
-    Tag _inputTag = null;
     Tag[MobileAmbient] _outputTags;
     synchronized(p) {
-      if(empty(p._outputTags) && p._inputTag is null) {
+      if(empty(p._outputTags)) {
           return false;
       }
       _outputTags = p._outputTags.dup;
@@ -293,28 +322,38 @@ class TagPool {
         p._outputTags = x;
         _outputTags = x;
     }
+    return true;
+  }
+  static bool __evalPIInput(TagPool p) {
+    debug(Tagging) {
+		sharedLog.info("TagPool.__evalPIInput");
+    }
+    Tag _inputTag = null;
+	if(p._inputTag is null) {
+		return false;
+	}
     synchronized(p) {
         _inputTag = p._inputTag;
     }
     if(_inputTag !is null) {
         debug(Tagging) {
-          sharedLog.info("input "~_inputTag.to!string);
+			sharedLog.info("input "~_inputTag.to!string);
         }
         _inputTag.evaluate;
         synchronized(p) {
-          assert(p._inputTag is _inputTag);
-          p._inputTag = null;
-          _inputTag = null;
+			assert(p._inputTag is _inputTag);
+			p._inputTag = null;
+			_inputTag = null;
         }
     }
     return true;
   }
-  static bool __eval(TagPool p) {
+
+  static bool __evalMobility(TagPool p) {
     debug(Tagging) {
-      sharedLog.info("TagPool.__eval");
+		sharedLog.info("TagPool.__evalMobility");
     }
 
-    if(__evalPI(p)) return true;
 
     Tag _outTag = null;
     Tag[MobileAmbient] _inTags;
@@ -329,7 +368,7 @@ class TagPool {
 
     foreach(a,tag ; _inTags) {
         debug(Tagging) {
-          sharedLog.info("in "~a.to!string);
+          sharedLog.info("in ",a);
         }
         tag.evaluate();
     }
@@ -368,6 +407,15 @@ class TagPool {
     } while(!_otherTags.empty);
 
     return true;
+  }
+  static bool __eval(TagPool p) {
+    debug(Tagging) {
+		sharedLog.info("TagPool.__eval");
+    }
+
+    if(__evalPIOutput(p)) return true;
+	if(__evalMobility(p)) return true;
+	return __evalPIInput(p);
   }
   // generic tag
   /*void createTag(Tag.Apply A,Tag.Close C)(Capability cap,MobileAmbient amb) {
@@ -521,7 +569,4 @@ class TagTask(T : TagTask!T) {
   }
 }
 
-unittest {
 
-
-}

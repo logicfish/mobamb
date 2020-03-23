@@ -1,6 +1,7 @@
 module mobamb.amb.types;
 
 private import std.algorithm;
+private import std.exception;
 
 debug {
   import std.experimental.logger;
@@ -140,8 +141,8 @@ abstract class Mobile : ProcessDomain {
     }
   }
   void movingOut(ProcessDomain c) {
-      assert(process !is null);
-      assert(c !is null);
+      enforce(process !is null);
+      enforce(c !is null);
       debug(Types) {
         sharedLog.info("movingOut ",name," --> ",c.name);
       }
@@ -166,8 +167,8 @@ abstract class Mobile : ProcessDomain {
   }
 
   void movingIn(ProcessDomain c) {
-      assert(process !is null);
-      assert(c !is null);
+      enforce(process !is null);
+      enforce(c !is null);
       debug(Types) {
         sharedLog.info("movingIn:",name," <-- ",c.name);
         sharedLog.info("movingIn:",name," <-- ",c);
@@ -581,7 +582,7 @@ class MobileProcessDomain : TypedProcessDomain {
   }
   override bool output(Capability _o) {
     auto o = cast(ProcessName.Output)_o;
-    assert(o !is null);
+    enforce(o !is null);
     auto n = resolve(o.name);
     auto c = channel(n);
     debug(Types) {
